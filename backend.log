@@ -1,0 +1,72 @@
+INFO:     Started server process [1937022]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     192.168.123.233:42936 - "GET /api/v1/exams HTTP/1.1" 200 OK
+INFO:     192.168.123.233:36260 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.123.233:36274 - "GET /api/v1/exams HTTP/1.1" 200 OK
+INFO:     192.168.123.233:36280 - "GET /api/v1/analytics/dashboard HTTP/1.1" 200 OK
+INFO:     192.168.123.233:36282 - "GET /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:36292 - "GET /api/v1/users HTTP/1.1" 200 OK
+[OneAuthService] Loaded real OneAuth data from sso.db: 5 depts, 2 users
+INFO:     192.168.123.233:11082 - "GET /api/v1/users/oneauth-candidates HTTP/1.1" 200 OK
+INFO:     192.168.123.233:6106 - "POST /api/v1/users/batch-role HTTP/1.1" 200 OK
+INFO:     192.168.123.233:6108 - "GET /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:6124 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     192.168.123.233:6136 - "POST /api/v1/users/batch-role HTTP/1.1" 200 OK
+INFO:     192.168.123.233:6148 - "GET /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:6158 - "GET /api/v1/users HTTP/1.1" 200 OK
+[OneAuthService] Loaded real OneAuth data from sso.db: 5 depts, 2 users
+[OneAuthService] Loaded real OneAuth data from sso.db: 5 depts, 2 users
+[OneAuthService] Loaded real OneAuth data from sso.db: 5 depts, 2 users
+INFO:     192.168.123.233:29746 - "POST /api/v1/users/sync-oneauth HTTP/1.1" 200 OK
+INFO:     192.168.123.233:29756 - "GET /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:29764 - "GET /api/v1/users HTTP/1.1" 200 OK
+[OneAuthService] Loaded real OneAuth data from sso.db: 5 depts, 2 users
+INFO:     192.168.123.233:29778 - "GET /api/v1/users/oneauth-candidates HTTP/1.1" 200 OK
+INFO:     192.168.123.233:45556 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK
+INFO:     192.168.123.233:45558 - "POST /api/v1/exams/4/start HTTP/1.1" 200 OK
+INFO:     192.168.123.233:53460 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK
+INFO:     192.168.123.233:27392 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK
+INFO:     192.168.123.233:27400 - "POST /api/v1/exams/4/start HTTP/1.1" 200 OK
+[OneAuthService] Loaded real OneAuth data from sso.db: 5 depts, 3 users
+INFO:     192.168.123.233:24006 - "GET /api/v1/users/oneauth-candidates HTTP/1.1" 200 OK
+[OneAuthService] Loaded real OneAuth data from sso.db: 5 depts, 3 users
+INFO:     192.168.123.233:24012 - "POST /api/v1/users/import-oneauth-users HTTP/1.1" 200 OK
+INFO:     192.168.123.233:24018 - "GET /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:24030 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     192.168.123.233:24032 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK
+INFO:     192.168.123.233:55124 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK
+INFO:     192.168.123.233:17016 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK
+INFO:     192.168.123.233:13880 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK
+INFO:     192.168.123.233:43946 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK
+INFO:     192.168.123.233:26232 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK
+INFO:     192.168.123.233:16726 - "GET /api/v1/grading/pending-items?status=all HTTP/1.1" 200 OK
+INFO:     192.168.123.233:16712 - "GET /api/v1/exams HTTP/1.1" 200 OK
+INFO:     192.168.123.233:16740 - "GET /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:16754 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     192.168.123.233:9276 - "POST /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:9282 - "GET /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:9286 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39372 - "GET /api/v1/exams HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39380 - "GET /api/v1/exams HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39382 - "GET /api/v1/analytics/dashboard HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39394 - "GET /api/v1/questions HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39404 - "GET /api/v1/papers HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39412 - "GET /api/v1/exams HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39420 - "GET /api/v1/papers HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39434 - "GET /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39436 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39438 - "GET /api/v1/exams HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39440 - "GET /api/v1/grading/pending-items?status=all HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39452 - "GET /api/v1/users/departments HTTP/1.1" 200 OK
+INFO:     192.168.123.233:39466 - "GET /api/v1/users HTTP/1.1" 200 OK
+INFO:     192.168.123.233:15598 - "GET /api/v1/exams HTTP/1.1" 200 OK
+INFO:     192.168.123.233:15614 - "GET /api/v1/grading/pending-items?status=all HTTP/1.1" 200 OK
+INFO:     192.168.123.233:15628 - "POST /api/v1/grading/grade-item HTTP/1.1" 200 OK
+INFO:     192.168.123.233:15634 - "GET /api/v1/grading/pending-items?status=all HTTP/1.1" 200 OK
+INFO:     192.168.123.233:55350 - "POST /api/v1/grading/grade-item HTTP/1.1" 200 OK
+INFO:     192.168.123.233:55364 - "GET /api/v1/grading/pending-items?status=all HTTP/1.1" 200 OK
+INFO:     192.168.123.233:55366 - "POST /api/v1/grading/grade-item HTTP/1.1" 200 OK
+INFO:     192.168.123.233:55370 - "GET /api/v1/grading/pending-items?status=all HTTP/1.1" 200 OK
+INFO:     192.168.123.233:35680 - "PUT /api/v1/exams/records/9/draft HTTP/1.1" 200 OK

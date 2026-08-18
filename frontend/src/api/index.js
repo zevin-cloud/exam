@@ -3,7 +3,7 @@ import request from './request'
 export const authApi = {
   login: (data) => request.post('/auth/login', data),
   getMe: () => request.get('/auth/me'),
-  getOneAuthUrl: () => request.get('/auth/oneauth/url'),
+  getOneAuthUrl: (params) => request.get('/auth/oneauth/url', { params }),
   handleOneAuthCallback: (data) => request.post('/auth/oneauth/callback', data),
   quickSwitch: (username) => request.post('/auth/quick-switch', { username })
 }

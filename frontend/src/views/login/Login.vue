@@ -136,7 +136,8 @@ const handleLogin = async () => {
 
 const handleOneAuthRedirect = async () => {
   try {
-    const res = await authApi.getOneAuthUrl()
+    const dynamicRedirectUri = `${window.location.origin}/auth/callback`
+    const res = await authApi.getOneAuthUrl({ redirect_uri: dynamicRedirectUri })
     if (res.authorize_url) {
       window.location.href = res.authorize_url
     }

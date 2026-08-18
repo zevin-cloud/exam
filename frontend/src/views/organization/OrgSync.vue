@@ -489,24 +489,32 @@
     <el-dialog 
       v-model="ssoConfigVisible" 
       title="OneAuth 统一身份源连接配置" 
-      width="580px"
+      width="620px"
       destroy-on-close
     >
-      <el-form :model="ssoConfigForm" label-width="120px">
-        <el-form-item label="SSO服务地址">
+      <el-form :model="ssoConfigForm" label-width="130px">
+        <el-form-item label="SSO服务地址" required>
           <el-input v-model="ssoConfigForm.server_url" placeholder="如 http://192.168.123.233:5174" />
         </el-form-item>
+        <el-form-item label="Client ID" required>
+          <el-input v-model="ssoConfigForm.client_id" placeholder="OneAuth 应用中分配的 Client ID" />
+        </el-form-item>
+        <el-form-item label="Client Secret" required>
+          <el-input v-model="ssoConfigForm.client_secret" type="password" show-password placeholder="OneAuth 应用中分配的 Client Secret" />
+        </el-form-item>
+        <el-form-item label="授权回调地址">
+          <el-input v-model="ssoConfigForm.redirect_uri" :placeholder="currentAutoRedirectUri" />
+          <div class="text-xs text-slate-400 mt-1">
+            当前智能默认：<span class="text-blue-600 font-mono">{{ currentAutoRedirectUri }}</span>（请确保在 OneAuth 登录后台中登记此回调地址）
+          </div>
+        </el-form-item>
+        
+        <el-divider content-position="left"><span class="text-xs text-slate-400">架构与成员同步凭据 (可选)</span></el-divider>
         <el-form-item label="同步用户名">
-          <el-input v-model="ssoConfigForm.sync_username" placeholder="具有组织只读权限的账号" />
+          <el-input v-model="ssoConfigForm.sync_username" placeholder="具有 OneAuth 组织只读权限的账号" />
         </el-form-item>
         <el-form-item label="同步密码">
           <el-input v-model="ssoConfigForm.sync_password" type="password" show-password />
-        </el-form-item>
-        <el-form-item label="Client ID">
-          <el-input v-model="ssoConfigForm.client_id" />
-        </el-form-item>
-        <el-form-item label="Client Secret">
-          <el-input v-model="ssoConfigForm.client_secret" type="password" show-password />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -579,12 +587,19 @@ const userForm = ref({
 // SSO 配置
 const ssoConfigVisible = ref(false)
 const savingConfig = ref(false)
+const currentAutoRedirectUri = computed(() => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/auth/callback`
+  }
+  return ''
+})
 const ssoConfigForm = ref({
   server_url: '',
   sync_username: '',
   sync_password: '',
   client_id: '',
-  client_secret: ''
+  client_secret: '',
+  redirect_uri: ''
 })
 
 // 候选员工选择导入

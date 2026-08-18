@@ -29,7 +29,12 @@ onMounted(async () => {
   }
 
   try {
-    const res = await authApi.handleOneAuthCallback({ code, state: route.query.state })
+    const dynamicRedirectUri = `${window.location.origin}/auth/callback`
+    const res = await authApi.handleOneAuthCallback({ 
+      code, 
+      state: route.query.state,
+      redirect_uri: dynamicRedirectUri 
+    })
     userStore.setAuth(res.access_token, res.user)
     ElMessage.success(`OneAuth SSO 登录成功！欢迎，${res.user.full_name}`)
     if (res.user.role === 'student') {

@@ -32,35 +32,45 @@
 通过 Docker 容器化部署，宿主机**无需安装任何 Python / Node.js 依赖**，全自动编译前端并初始化数据库。
 
 ### 1. 克隆项目
+
 ```bash
 git clone <项目仓库地址> /root/code/exam
 cd /exam
 ```
 
 ### 2. 配置环境变量
+
 复制并检查 `.env` 文件：
+
 ```bash
 cp .env.example .env
 ```
+
 > 💡 若需修改外部访问端口、OneAuth 对接地址或数据库密码，可直接编辑 `.env`：
+>
 > - `PORT=8000`：对外访问端口（可改为 `80` 或任意可用端口）；
 > - `ONEAUTH_SERVER_URL`：OneAuth 统一认证后台地址（默认 `http://<IP>:5174`）；
 > - `ONEAUTH_REDIRECT_URI`：SSO 登录跳回地址（格式：`http://<当前机器IP或域名>:8000/auth/callback`）。
 
 ### 3. 一键构建并启动
+
 ```bash
 bash deploy.sh start
 ```
+
 脚本将自动完成：
+
 1. 容器内多阶段编译打包前端 Vue 3 代码；
 2. 启动并初始化 MySQL 8.0 数据库服务；
 3. 启动 FastAPI 多进程应用并自动建表与插入演示种子数据。
 
 ### 4. 访问系统
+
 - **考务系统前台/管理后台（单端口一体化）**：`http://<服务器IP>:8000`
 - **Swagger API 接口文档**：`http://<服务器IP>:8000/docs`
 
 > 🔑 **系统内置初始超级管理员账号**：
+>
 > - **用户名**：`admin`
 > - **默认密码**：`admin123`
 
@@ -71,6 +81,7 @@ bash deploy.sh start
 如果您在开发环境或不需要 Docker 的机器上运行：
 
 ### 1. 启动后端
+
 ```bash
 cd /root/code/exam/backend
 pip install -r requirements.txt
@@ -79,6 +90,7 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### 2. 启动前端
+
 ```bash
 cd /root/code/exam/frontend
 npm install
@@ -86,6 +98,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
 或直接在根目录执行一键启动脚本：
+
 ```bash
 bash /root/code/exam/start.sh
 ```
@@ -122,6 +135,32 @@ bash /root/code/exam/start.sh
 | `ONEAUTH_CLIENT_ID` | `app_...` | OneAuth 应用 Client ID |
 | `ONEAUTH_CLIENT_SECRET` | `...` | OneAuth 应用 Client Secret |
 | `ONEAUTH_REDIRECT_URI` | `http://...:8000/auth/callback` | OAuth2 授权回调地址 |
+
+---
+
+## 🔐 OneAuth SSO 认证与网络通信拓扑
+
+考务系统与 OneAuth 统一身份认证之间的交互全部为**考务系统主动请求**或**浏览器端重定向**。  
+因此：**只要考务系统能访问 OneAuth，即便 OneAuth 无法反向访问考务系统（例如跨网段/单向防火墙），系统也能 100% 正常运行！**
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 考生浏览器
+    participant Exam as 考务系统
+    participant OneAuth as OneAuth 统一身份认证
+
+    Note over Exam,OneAuth: 场景一：组织与员工同步
+    Exam->>OneAuth: ① 考务系统主动拉取部门与人员 (GET /api/v1/users)
+    OneAuth-->>Exam: ② OneAuth 返回数据 (被动响应)
+
+    Note over User,OneAuth: 场景二：考生 SSO 免密登录
+    User->>OneAuth: ③ 浏览器跳转到 OneAuth 登录页
+    OneAuth-->>User: ④ 登录成功，浏览器带着 code 跳回考务系统 (302 重定向)
+    User->>Exam: ⑤ 浏览器将 code 传给考务系统
+    Exam->>OneAuth: ⑥ 考务系统主动带着 code 向 OneAuth 换取用户信息 (POST /oauth/token)
+    OneAuth-->>Exam: ⑦ OneAuth 返回用户身份信息 (被动响应)
+```
 
 ---
 

@@ -430,3 +430,33 @@ def init_seed_data():
 
 # 启动时执行数据初始化
 init_seed_data()
+
+# =========================================================
+# 前端一体化静态托管 (SPA 模式，无需 Nginx)
+# =========================================================
+from fastapi.responses import FileResponse
+
+candidates = [
+    os.getenv("FRONTEND_DIST_DIR", ""),
+    "/app/frontend_dist",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../frontend/dist"))
+]
+frontend_dist = next((p for p in candidates if p and os.path.exists(os.path.join(p, "index.html"))), None)
+
+if frontend_dist:
+    assets_dir = os.path.join(frontend_dist, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend_assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        # 排除 API 与静态文档
+        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
+            return None
+        file_path = os.path.join(frontend_dist, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
+    
+    print(f"[SPA] 已成功挂载前端生产资源: {frontend_dist}")
+

@@ -4,6 +4,7 @@ from app.models.question import QuestionBank, Question, QuestionType, Difficulty
 from app.models.paper import Paper
 from app.models.exam import ExamTask
 from app.models.exam_record import ExamRecord, ExamAnswerDetail, ExamRecordStatus
+from app.models.system_config import SystemConfig
 
 __all__ = [
     "Base",
@@ -18,5 +19,6 @@ __all__ = [
     "ExamTask",
     "ExamRecord",
     "ExamAnswerDetail",
-    "ExamRecordStatus"
+    "ExamRecordStatus",
+    "SystemConfig"
 ]

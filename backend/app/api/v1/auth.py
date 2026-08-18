@@ -14,6 +14,7 @@ router = APIRouter()
 class SSOCallbackRequest(BaseModel):
     code: str
     state: Optional[str] = None
+    redirect_uri: Optional[str] = None
 
 class QuickSwitchRequest(BaseModel):
     username: str
@@ -75,15 +76,15 @@ def read_current_user(current_user: User = Depends(get_current_user), db: Sessio
     )
 
 @router.get("/oneauth/url")
-def get_oneauth_authorize_url():
-    """获取 OneAuth SSO 认证跳转链接"""
-    url = oneauth_service.get_authorize_url()
+def get_oneauth_authorize_url(redirect_uri: Optional[str] = None, db: Session = Depends(get_db)):
+    """获取 OneAuth SSO 认证跳转链接（动态支持前端当前域名/端口的回调地址）"""
+    url = oneauth_service.get_authorize_url(redirect_uri=redirect_uri, db=db)
     return {"authorize_url": url}
 
 @router.post("/oneauth/callback", response_model=Token)
 async def oneauth_callback(payload: SSOCallbackRequest, db: Session = Depends(get_db)):
     """OneAuth OAuth2 授权码回调换取登录凭据"""
-    user_info = await oneauth_service.exchange_token_and_get_user(payload.code)
+    user_info = await oneauth_service.exchange_token_and_get_user(payload.code, redirect_uri=payload.redirect_uri, db=db)
     if not user_info:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 

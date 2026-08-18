@@ -304,15 +304,15 @@ def delete_user(id: int, db: Session = Depends(get_db)):
     return {"success": True, "message": "成员已删除"}
 
 @router.get("/sso-config", dependencies=[Depends(require_admin)])
-def get_sso_config(db: Session = Depends(get_db)):
-    """获取企业身份源/SSO连接配置（从数据库持久化存储读取）"""
-    return oneauth_service.get_config(db=db)
+def get_sso_config():
+    """获取企业身份源/SSO连接配置"""
+    return oneauth_service.get_config()
 
 @router.post("/sso-config", dependencies=[Depends(require_admin)])
-def update_sso_config(payload: dict, db: Session = Depends(get_db)):
-    """更新企业身份源/SSO连接配置（持久化至数据库，多 Worker 与重启后永久生效）"""
-    oneauth_service.update_config(payload, db=db)
-    return {"success": True, "message": "身份源连接配置已持久化保存", "data": oneauth_service.get_config(db=db)}
+def update_sso_config(payload: dict):
+    """更新企业身份源/SSO连接配置（如服务器地址、同步账号等）"""
+    oneauth_service.update_config(payload)
+    return {"success": True, "message": "身份源连接配置已更新", "data": oneauth_service.get_config()}
 
 @router.post("/sync-departments", dependencies=[Depends(require_admin)])
 def sync_oneauth_departments(db: Session = Depends(get_db)):

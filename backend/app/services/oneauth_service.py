@@ -5,124 +5,91 @@ import re
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.core.database import SessionLocal
 from app.models.user import User, Department, RoleEnum
-from app.models.system_config import SystemConfig
 from app.core.security import get_password_hash
 
 class OneAuthService:
     """
     对接 OneAuth (https://github.com/zjl111/OneAuth.git)
-    实现 OAuth2 授权码模式登录及部门/员工定时同步（配置持久化存储于数据库 SystemConfig 表中）
+    实现 OAuth2 授权码模式登录及部门/员工定时同步
     """
-    def _get_db_session(self, db: Optional[Session] = None):
-        if db is not None:
-            return db, False
-        return SessionLocal(), True
+    def __init__(self):
+        self.server_url = settings.ONEAUTH_SERVER_URL.rstrip("/")
+        self.sync_username = "zhengzewen-iam"
+        self.sync_password = "South@2025"
+        self.client_id = settings.ONEAUTH_CLIENT_ID
+        self.client_secret = settings.ONEAUTH_CLIENT_SECRET
+        self.redirect_uri = settings.ONEAUTH_REDIRECT_URI
 
-    def get_config(self, db: Optional[Session] = None) -> Dict[str, Any]:
-        """获取当前配置（优先读取数据库持久化配置，若无则使用 .env 默认值）"""
-        session, should_close = self._get_db_session(db)
-        try:
-            configs = session.query(SystemConfig).all()
-            config_map = {c.key: c.value for c in configs}
-            return {
-                "server_url": config_map.get("oneauth_server_url") or settings.ONEAUTH_SERVER_URL.rstrip("/"),
-                "sync_username": config_map.get("oneauth_sync_username") or "zhengzewen-iam",
-                "sync_password": config_map.get("oneauth_sync_password") or "South@2025",
-                "client_id": config_map.get("oneauth_client_id") or settings.ONEAUTH_CLIENT_ID,
-                "client_secret": config_map.get("oneauth_client_secret") or settings.ONEAUTH_CLIENT_SECRET,
-                "redirect_uri": config_map.get("oneauth_redirect_uri") or settings.ONEAUTH_REDIRECT_URI,
-            }
-        finally:
-            if should_close:
-                session.close()
+    def get_config(self) -> Dict[str, Any]:
+        return {
+            "server_url": self.server_url,
+            "sync_username": self.sync_username,
+            "sync_password": self.sync_password,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "redirect_uri": self.redirect_uri,
+        }
 
-    def update_config(self, config: Dict[str, Any], db: Optional[Session] = None):
-        """持久化保存 OneAuth 配置到数据库中（重启、多 Worker 间均即时生效）"""
-        session, should_close = self._get_db_session(db)
-        try:
-            key_mapping = {
-                "server_url": "oneauth_server_url",
-                "sync_username": "oneauth_sync_username",
-                "sync_password": "oneauth_sync_password",
-                "client_id": "oneauth_client_id",
-                "client_secret": "oneauth_client_secret",
-                "redirect_uri": "oneauth_redirect_uri",
-            }
-            for req_key, db_key in key_mapping.items():
-                if req_key in config and config[req_key] is not None:
-                    val = str(config[req_key]).strip()
-                    if req_key == "server_url":
-                        val = val.rstrip("/")
-                    item = session.query(SystemConfig).filter(SystemConfig.key == db_key).first()
-                    if not item:
-                        item = SystemConfig(key=db_key, value=val)
-                        session.add(item)
-                    else:
-                        item.value = val
-            session.commit()
-        except Exception as e:
-            session.rollback()
-            raise e
-        finally:
-            if should_close:
-                session.close()
+    def update_config(self, config: Dict[str, Any]):
+        if "server_url" in config and config["server_url"]:
+            self.server_url = config["server_url"].rstrip("/")
+        if "sync_username" in config:
+            self.sync_username = config["sync_username"]
+        if "sync_password" in config:
+            self.sync_password = config["sync_password"]
+        if "client_id" in config:
+            self.client_id = config["client_id"]
+        if "client_secret" in config:
+            self.client_secret = config["client_secret"]
+        if "redirect_uri" in config:
+            self.redirect_uri = config["redirect_uri"]
 
-    def get_authorize_url(self, redirect_uri: Optional[str] = None, state: str = "exam_auth", db: Optional[Session] = None) -> str:
-        """生成跳转 OneAuth 统一认证授权地址（支持前端动态传入当前真实访问的回调地址）"""
-        cfg = self.get_config(db)
-        r_uri = redirect_uri or cfg.get("redirect_uri") or settings.ONEAUTH_REDIRECT_URI
-        server_url = cfg.get("server_url")
-        client_id = cfg.get("client_id")
-        return f"{server_url}/oauth/authorize?client_id={client_id}&response_type=code&redirect_uri={r_uri}&scope=openid%20profile%20email&state={state}"
+    def get_authorize_url(self, state: str = "exam_auth") -> str:
+        """生成跳转 OneAuth 统一认证授权地址"""
+        return f"{self.server_url}/oauth/authorize?client_id={self.client_id}&response_type=code&redirect_uri={self.redirect_uri}&scope=openid%20profile%20email&state={state}"
 
-    async def exchange_token_and_get_user(self, code: str, redirect_uri: Optional[str] = None, db: Optional[Session] = None) -> Optional[Dict[str, Any]]:
+    async def exchange_token_and_get_user(self, code: str) -> Optional[Dict[str, Any]]:
         """使用 authorization_code 向 OneAuth 换取 Access Token 并拉取用户信息"""
-        cfg = self.get_config(db)
-        server_url = cfg.get("server_url")
-        client_id = cfg.get("client_id")
-        client_secret = cfg.get("client_secret")
-        r_uri = redirect_uri or cfg.get("redirect_uri") or settings.ONEAUTH_REDIRECT_URI
-
         token_endpoints = [
-            f"{server_url}/oauth/token",
+            f"{self.server_url}/oauth/token",
             "http://127.0.0.1:8080/oauth/token",
-            f"{server_url}/api/v1/oauth/token"
+            f"{self.server_url}/api/v1/oauth/token"
         ]
         userinfo_endpoints = [
-            f"{server_url}/oauth/userinfo",
+            f"{self.server_url}/oauth/userinfo",
             "http://127.0.0.1:8080/oauth/userinfo",
-            f"{server_url}/userinfo",
-            f"{server_url}/api/v1/userinfo"
+            f"{self.server_url}/userinfo",
+            f"{self.server_url}/api/v1/userinfo"
         ]
 
         access_token = None
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # 1. 换取 access_token
+                # 1. 换取 access_token (优先使用 client_secret_post)
                 for t_url in token_endpoints:
                     try:
                         token_resp = await client.post(t_url, data={
                             "grant_type": "authorization_code",
                             "code": code,
-                            "client_id": client_id,
-                            "client_secret": client_secret,
-                            "redirect_uri": r_uri,
+                            "client_id": self.client_id,
+                            "client_secret": self.client_secret,
+                            "redirect_uri": self.redirect_uri,
                         })
                         if token_resp.status_code == 200:
                             token_data = token_resp.json()
                             access_token = token_data.get("access_token")
                             if access_token:
                                 break
+                        # 尝试 Basic Auth 备用方式
                         basic_resp = await client.post(
                             t_url,
                             data={
                                 "grant_type": "authorization_code",
                                 "code": code,
-                                "redirect_uri": r_uri,
+                                "redirect_uri": self.redirect_uri,
                             },
-                            auth=(client_id, client_secret)
+                            auth=(self.client_id, self.client_secret)
                         )
                         if basic_resp.status_code == 200:
                             token_data = basic_resp.json()
@@ -145,6 +112,7 @@ class OneAuthService:
                             if isinstance(raw_user, dict) and "data" in raw_user and isinstance(raw_user["data"], dict):
                                 raw_user = raw_user["data"]
                             
+                            # 提取统一字段
                             username = raw_user.get("preferred_username") or raw_user.get("username") or raw_user.get("sub") or raw_user.get("name")
                             full_name = raw_user.get("name") or raw_user.get("full_name") or raw_user.get("preferred_username") or username
                             email = raw_user.get("email") or f"{username}@fit2cloud.com"
@@ -164,13 +132,8 @@ class OneAuthService:
             print(f"[OneAuthService] SSO exchange error: {e}")
         return None
 
-    def fetch_remote_organization_data(self, db: Optional[Session] = None) -> Dict[str, Any]:
-        """拉取 OneAuth 组织架构与成员数据（优先读取持久化配置）"""
-        cfg = self.get_config(db)
-        server_url = cfg.get("server_url")
-        sync_username = cfg.get("sync_username")
-        sync_password = cfg.get("sync_password")
-
+    def fetch_remote_organization_data(self) -> Dict[str, Any]:
+        """拉取 OneAuth 组织架构与成员数据（优先直连 OneAuth 本地真实数据库或远端 HTTP API）"""
         # 1. 优先读取同机 OneAuth 生产数据库
         sso_db_path = "/root/code/OneAuth-main/sso-server/data/sso.db"
         if os.path.exists(sso_db_path):
@@ -205,9 +168,9 @@ class OneAuthService:
 
         # 2. 尝试从远程 HTTP API 拉取
         candidate_urls = []
-        if server_url:
-            candidate_urls.append(server_url.rstrip("/"))
-            candidate_urls.append(re.sub(r':\d+$', ':8080', server_url.rstrip("/")))
+        if self.server_url:
+            candidate_urls.append(self.server_url.rstrip("/"))
+            candidate_urls.append(re.sub(r':\d+$', ':8080', self.server_url.rstrip("/")))
         candidate_urls.extend(["http://127.0.0.1:8080", "http://192.168.123.233:8080"])
         
         seen = set()
@@ -217,8 +180,8 @@ class OneAuthService:
             try:
                 with httpx.Client(timeout=4.0) as client:
                     login_resp = client.post(f"{base_url}/api/v1/auth/login", json={
-                        "username": sync_username,
-                        "password": sync_password
+                        "username": self.sync_username,
+                        "password": self.sync_password
                     })
                     if login_resp.status_code == 200:
                         token = login_resp.json().get("data", {}).get("access_token")

@@ -13,8 +13,8 @@ case "$ACTION" in
     echo "✅ 构建完成！"
     ;;
   up|start)
-    echo "🚀 正在构建并启动服务 (MySQL 8.0 + FastAPI 一体化应用)..."
-    docker compose up -d --build --force-recreate
+    echo "🚀 正在启动服务 (MySQL 8.0 + FastAPI 一体化应用)..."
+    docker compose up -d --build
     
     # 动态获取对外端口与主机 IP
     PORT_VAL=$(grep "^PORT=" .env 2>/dev/null | cut -d '=' -f2 | tr -d '\r ' || echo "")

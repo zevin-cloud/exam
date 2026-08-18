@@ -14,7 +14,6 @@ router = APIRouter()
 class SSOCallbackRequest(BaseModel):
     code: str
     state: Optional[str] = None
-    redirect_uri: Optional[str] = None
 
 class QuickSwitchRequest(BaseModel):
     username: str
@@ -38,26 +37,23 @@ def login_for_access_token(payload: UserLogin, db: Session = Depends(get_db)):
         if dept:
             dept_name = dept.name
             
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        user=UserOut(
-            id=user.id,
-            username=user.username,
-            full_name=user.full_name,
-            email=user.email,
-            role=user.role,
-            department_id=user.department_id,
-            department_name=dept_name,
-            is_active=user.is_active,
-            avatar=user.avatar,
-            sso_user_id=user.sso_user_id,
-            created_at=user.created_at
-        )
+    user_out = UserOut(
+        id=user.id,
+        username=user.username,
+        full_name=user.full_name,
+        email=user.email,
+        role=user.role,
+        department_id=user.department_id,
+        department_name=dept_name,
+        is_active=user.is_active,
+        avatar=user.avatar,
+        sso_user_id=user.sso_user_id,
+        created_at=user.created_at
     )
+    return Token(access_token=access_token, token_type="bearer", user=user_out)
 
 @router.get("/me", response_model=UserOut)
-def read_users_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def read_current_user(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     dept_name = None
     if current_user.department_id:
         dept = db.query(Department).filter(Department.id == current_user.department_id).first()
@@ -79,15 +75,15 @@ def read_users_me(current_user: User = Depends(get_current_user), db: Session = 
     )
 
 @router.get("/oneauth/url")
-def get_oneauth_authorize_url(redirect_uri: Optional[str] = None, db: Session = Depends(get_db)):
-    """获取 OneAuth SSO 认证跳转链接（动态支持前端当前域名/端口的回调地址）"""
-    url = oneauth_service.get_authorize_url(redirect_uri=redirect_uri, db=db)
+def get_oneauth_authorize_url():
+    """获取 OneAuth SSO 认证跳转链接"""
+    url = oneauth_service.get_authorize_url()
     return {"authorize_url": url}
 
 @router.post("/oneauth/callback", response_model=Token)
 async def oneauth_callback(payload: SSOCallbackRequest, db: Session = Depends(get_db)):
     """OneAuth OAuth2 授权码回调换取登录凭据"""
-    user_info = await oneauth_service.exchange_token_and_get_user(payload.code, redirect_uri=payload.redirect_uri, db=db)
+    user_info = await oneauth_service.exchange_token_and_get_user(payload.code)
     if not user_info:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 

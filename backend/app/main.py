@@ -39,6 +39,14 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/static/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
+@app.get("/")
+def root():
+    return {
+        "message": "Welcome to Enterprise Exam System API",
+        "docs": "/docs",
+        "version": "1.0.0"
+    }
+
 def init_seed_data():
     """初始化预置种子数据（开箱即用，提供完整演示与测试环境）"""
     db = SessionLocal()
@@ -440,14 +448,10 @@ if frontend_dist:
     if os.path.exists(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend_assets")
 
-    @app.get("/", include_in_schema=False)
-    async def serve_index():
-        return FileResponse(os.path.join(frontend_dist, "index.html"))
-
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
-        # 排除 API 与文档路由
-        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json") or full_path.startswith("redoc"):
+        # 排除 API 与静态文档
+        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
             return None
         file_path = os.path.join(frontend_dist, full_path)
         if full_path and os.path.isfile(file_path):
@@ -455,12 +459,4 @@ if frontend_dist:
         return FileResponse(os.path.join(frontend_dist, "index.html"))
     
     print(f"[SPA] 已成功挂载前端生产资源: {frontend_dist}")
-else:
-    @app.get("/")
-    def root():
-        return {
-            "message": "Welcome to Enterprise Exam System API",
-            "docs": "/docs",
-            "version": "1.0.0"
-        }
 

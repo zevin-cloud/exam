@@ -34,7 +34,7 @@
 ### 1. 克隆项目
 ```bash
 git clone <项目仓库地址> /root/code/exam
-cd /root/code/exam
+cd /exam
 ```
 
 ### 2. 配置环境变量

@@ -1,215 +1,281 @@
-# 🎓 企业在线考务与培训考核系统 (Enterprise Exam System)
+# Enterprise Exam
 
-基于 **FastAPI + Vue 3 + MySQL / SQLite** 构建的现代化轻量级企业在线考务与培训考核平台，内置 **OneAuth 统一身份源对接**、**可视化试卷编辑器**、**防作弊答题监考**与**自动化/人工阅卷流水线**。
+面向企业内部培训与考核的在线考务平台，基于 **FastAPI + Vue 3** 构建，支持题库、试卷、考试发布、在线答题、自动/人工阅卷、成绩分析和 OneAuth 统一身份认证。
 
----
+生产环境可通过 Docker 以单端口运行完整系统；本地开发默认使用 SQLite，无需额外准备数据库。
 
-## 🌟 系统核心特性
+## 功能概览
 
-- **统一身份认证 (OneAuth SSO)**：一键同步企业部门架构树与员工成员，支持 OAuth2 授权码免密登录。
-- **可视化试卷设计**：三栏可视化编辑器，支持单选、多选、判断、填空、简答等 5 大主流题型与分值实时统计。
-- **考务排期与权限管控**：按全员 / 部门 / 指定人员多维授权，支持自定义开考时间窗口或永久有效。
-- **防作弊考场机制**：支持切屏次数实时监测与超限强制交卷，支持公开/保密两种考后查卷模式。
-- **极简一体化容器化交付**：采用 **FastAPI 一体化 + MySQL 8.0 双容器架构**，免装 Nginx 与 Node.js，单端口（默认 `8000`）搞定全套前后台。
+- **身份与组织**：OneAuth OAuth2 登录、部门与员工同步、角色权限控制
+- **题库与试卷**：单选、多选、判断、填空、简答题，可视化组卷与分值校验
+- **考试管理**：考试时间、参与范围、公开/保密查卷策略与防切屏设置
+- **答题与阅卷**：自动判分、Markdown 简答、图片附件、人工阅卷工作台
+- **数据分析**：部门成绩、通过率、分数分布、知识盲区及明细导出
+- **一体化部署**：Vue 静态资源由 FastAPI 托管，生产环境只需暴露一个端口
 
----
+## 技术栈
 
-## 🛠️ 环境准备
+| 层级 | 技术 |
+| --- | --- |
+| 前端 | Vue 3、Vite、Element Plus、Pinia、ECharts |
+| 后端 | FastAPI、SQLAlchemy、Pydantic、JWT |
+| 数据库 | SQLite（本地开发）/ MySQL 8.0（生产部署） |
+| 部署 | Docker Compose、Uvicorn |
 
-在目标机器上部署，**仅需满足以下基础环境之一**：
+## 快速开始
 
-- **推荐方式（Docker 部署）**：
-  - Docker 20.10+
-  - Docker Compose 2.0+（支持 `docker compose` 命令）
-- **本地直接运行方式（开发/无 Docker 机器）**：
-  - Python 3.10+
-  - Node.js 18+（及 npm）
+### 方式一：本地开发
 
----
+环境要求：
 
-## 🚀 方式一：Docker 一键生产部署（推荐）
+- Python 3.10+
+- Node.js 20.19+ 或 22.12+
+- npm
 
-通过 Docker 容器化部署，宿主机**无需安装任何 Python / Node.js 依赖**，全自动编译前端并初始化数据库。
-
-### 1. 克隆项目
-
-```bash
-git clone <项目仓库地址> /root/code/exam
-cd /exam
-```
-
-### 2. 配置环境变量
-
-复制并检查 `.env` 文件：
-
-```bash
-cp .env.example .env
-```
-
-> 💡 若需修改外部访问端口、OneAuth 对接地址或数据库密码，可直接编辑 `.env`：
->
-> - `PORT=8000`：对外访问端口（可改为 `80` 或任意可用端口）；
-> - `ONEAUTH_SERVER_URL`：OneAuth 统一认证后台地址（默认 `http://<IP>:5174`）；
-> - `ONEAUTH_REDIRECT_URI`：SSO 登录跳回地址（格式：`http://<当前机器IP或域名>:8000/auth/callback`）。
-
-### 3. 一键构建并启动
-
-```bash
-bash deploy.sh start
-```
-
-脚本将自动完成：
-
-1. 容器内多阶段编译打包前端 Vue 3 代码；
-2. 启动并初始化 MySQL 8.0 数据库服务；
-3. 启动 FastAPI 多进程应用并自动建表与插入演示种子数据。
-
-### 4. 访问系统
-
-- **考务系统前台/管理后台（单端口一体化）**：`http://<服务器IP>:8000`
-- **Swagger API 接口文档**：`http://<服务器IP>:8000/docs`
-
-> 🔑 **系统内置初始超级管理员账号**：
->
-> - **用户名**：`admin`
-> - **默认密码**：`admin123`
-
----
-
-## 💻 方式二：本地直接运行（开发与调试）
-
-如果您在开发环境或不需要 Docker 的机器上运行：
-
-### 1. 启动后端
-
-```bash
-cd /root/code/exam/backend
-pip install -r requirements.txt
-# 启动 FastAPI 后端 (开发模式使用 SQLite 数据库，开箱即用)
-python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 2. 启动前端
-
-```bash
-cd /root/code/exam/frontend
-npm install
-npm run dev -- --host 0.0.0.0 --port 5173
-```
-
-或直接在根目录执行一键启动脚本：
-
-```bash
-bash /root/code/exam/start.sh
-```
-
-脚本会自动识别项目目录，不依赖固定安装路径。Windows 可直接使用：
+Windows：
 
 ```powershell
+git clone <仓库地址>
+cd exam
 .\start.cmd
-# 或：.\start.ps1
 ```
 
-停止脚本所启动的服务：
+macOS / Linux：
 
 ```bash
-bash start.sh stop
+git clone <仓库地址>
+cd exam
+chmod +x start.sh
+./start.sh
 ```
 
-```powershell
-.\start.cmd -Action stop
-```
+脚本会自动创建 Python 虚拟环境、安装缺失依赖并启动前后端：
 
-若默认端口已被其他程序占用，可在 Windows 指定其他端口：
+| 服务 | 默认地址 |
+| --- | --- |
+| 前端 | http://127.0.0.1:5173 |
+| 后端 | http://127.0.0.1:8000 |
+| Swagger API 文档 | http://127.0.0.1:8000/docs |
+
+Windows 端口被占用时，可直接指定备用端口：
 
 ```powershell
 .\start.cmd -BackendPort 8010 -FrontendPort 5174
 ```
 
----
+停止脚本启动的服务：
 
-## 📋 常用运维管理命令 (Docker 模式)
+```powershell
+.\start.cmd -Action stop
+```
 
-在项目根目录下使用 `deploy.sh` 脚本进行日常运维：
+```bash
+./start.sh stop
+```
 
-| 操作需求 | 执行命令 | 说明 |
-| :--- | :--- | :--- |
-| **启动 / 构建更新** | `bash deploy.sh start` | 自动构建镜像并在后台守护运行 |
-| **停止服务** | `bash deploy.sh stop` | 优雅停止并清理容器 |
-| **重启系统** | `bash deploy.sh restart` | 快速重启所有服务 |
-| **查看运行日志** | `bash deploy.sh logs` | 实时查看 FastAPI 业务与访问日志 |
-| **查看全部日志** | `bash deploy.sh logs-all` | 同时查看 MySQL 与后端日志 |
-| **一键备份数据库** | `bash deploy.sh backup` | 自动导出 SQL 备份至 `backups/` 目录 |
+也可以分别启动服务：
 
----
+```bash
+# 终端 1：后端
+cd backend
+python -m venv .venv
 
-## ⚙️ 配置文件说明 (`.env`)
+# Windows
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-| 配置项 | 默认值 | 说明 |
-| :--- | :--- | :--- |
-| `PORT` | `8000` | 对外开放的 HTTP 访问端口 |
-| `MYSQL_PORT` | `3306` | MySQL 对外端口（可用于外部数据库客户端连接） |
-| `MYSQL_ROOT_PASSWORD` | `root123456` | MySQL root 密码 |
-| `MYSQL_DATABASE` | `exam_db` | 考务系统数据库名称 |
-| `MYSQL_USER` | `exam_user` | 业务数据库用户名 |
-| `MYSQL_PASSWORD` | `exam_pass123` | 业务数据库密码 |
-| `SECRET_KEY` | *(随机字符串)* | JWT Token 鉴权加密密钥 |
-| `ONEAUTH_SERVER_URL` | `http://...:5174` | OneAuth 统一身份源服务器地址 |
-| `ONEAUTH_CLIENT_ID` | `app_...` | OneAuth 应用 Client ID |
-| `ONEAUTH_CLIENT_SECRET` | `...` | OneAuth 应用 Client Secret |
-| `ONEAUTH_REDIRECT_URI` | `http://...:8000/auth/callback` | OAuth2 授权回调地址 |
+# macOS / Linux
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
----
+```bash
+# 终端 2：前端
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
+```
 
-## 🔐 OneAuth SSO 认证与网络通信拓扑
+### 方式二：Docker 生产部署
 
-考务系统与 OneAuth 统一身份认证之间的交互全部为**考务系统主动请求**或**浏览器端重定向**。  
-因此：**只要考务系统能访问 OneAuth，即便 OneAuth 无法反向访问考务系统（例如跨网段/单向防火墙），系统也能 100% 正常运行！**
+环境要求：Docker 20.10+、Docker Compose 2.0+。
+
+```bash
+git clone <仓库地址>
+cd exam
+cp .env.example .env
+```
+
+上线前至少修改 `.env` 中的数据库密码、`SECRET_KEY`、OneAuth 凭据和回调地址，然后执行：
+
+```bash
+chmod +x deploy.sh
+./deploy.sh start
+```
+
+默认访问地址：
+
+- 系统入口：`http://<服务器地址>:8000`
+- API 文档：`http://<服务器地址>:8000/docs`
+
+常用运维命令：
+
+| 操作 | 命令 |
+| --- | --- |
+| 启动或重新构建 | `./deploy.sh start` |
+| 停止服务 | `./deploy.sh stop` |
+| 重启服务 | `./deploy.sh restart` |
+| 查看应用日志 | `./deploy.sh logs` |
+| 查看全部日志 | `./deploy.sh logs-all` |
+| 备份数据库 | `./deploy.sh backup` |
+
+MySQL 数据和上传附件分别保存在 Docker 卷 `exam_mysql_data` 与 `exam_uploads_data` 中，重新构建应用容器不会清空业务数据。
+
+## 初始账号
+
+首次启动会自动初始化演示数据：
+
+| 项目 | 默认值 |
+| --- | --- |
+| 用户名 | `admin` |
+| 密码 | `admin123` |
+| 角色 | 超级管理员 |
+
+> 生产环境登录后请立即修改默认密码。
+
+## 环境变量
+
+Docker 部署从项目根目录的 `.env` 读取配置。
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `PORT` | `8000` | 系统对外端口 |
+| `MYSQL_PORT` | `3306` | MySQL 宿主机端口 |
+| `MYSQL_DATABASE` | `exam_db` | 数据库名称 |
+| `MYSQL_USER` | `exam_user` | 业务数据库用户 |
+| `MYSQL_PASSWORD` | — | 业务数据库密码 |
+| `MYSQL_ROOT_PASSWORD` | — | MySQL root 密码 |
+| `SECRET_KEY` | — | JWT 签名密钥，生产环境必须使用随机强密钥 |
+| `ONEAUTH_SERVER_URL` | — | OneAuth 服务地址 |
+| `ONEAUTH_CLIENT_ID` | — | OAuth2 Client ID |
+| `ONEAUTH_CLIENT_SECRET` | — | OAuth2 Client Secret |
+| `ONEAUTH_REDIRECT_URI` | — | 登录回调地址，例如 `https://exam.example.com/auth/callback` |
+
+生成随机 `SECRET_KEY` 的示例：
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+## OneAuth 通信方式
+
+考务系统与 OneAuth 的服务端通信均由考务系统主动发起；登录完成后，OneAuth 通过用户浏览器重定向回考务系统。因此 OneAuth 不需要主动访问考务系统的内网地址，但以下链路必须可达：
+
+1. 考务系统服务器能够访问 `ONEAUTH_SERVER_URL`。
+2. 用户浏览器能够访问 OneAuth 登录页。
+3. 用户浏览器能够访问 `ONEAUTH_REDIRECT_URI`。
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as 考生浏览器
+    actor User as 用户浏览器
     participant Exam as 考务系统
-    participant OneAuth as OneAuth 统一身份认证
+    participant OneAuth as OneAuth
 
-    Note over Exam,OneAuth: 场景一：组织与员工同步
-    Exam->>OneAuth: ① 考务系统主动拉取部门与人员 (GET /api/v1/users)
-    OneAuth-->>Exam: ② OneAuth 返回数据 (被动响应)
-
-    Note over User,OneAuth: 场景二：考生 SSO 免密登录
-    User->>OneAuth: ③ 浏览器跳转到 OneAuth 登录页
-    OneAuth-->>User: ④ 登录成功，浏览器带着 code 跳回考务系统 (302 重定向)
-    User->>Exam: ⑤ 浏览器将 code 传给考务系统
-    Exam->>OneAuth: ⑥ 考务系统主动带着 code 向 OneAuth 换取用户信息 (POST /oauth/token)
-    OneAuth-->>Exam: ⑦ OneAuth 返回用户身份信息 (被动响应)
+    Exam->>OneAuth: 拉取部门和用户
+    OneAuth-->>Exam: 返回组织数据
+    User->>OneAuth: 登录并授权
+    OneAuth-->>User: 携带 code 重定向
+    User->>Exam: 请求回调地址
+    Exam->>OneAuth: 使用 code 换取身份信息
+    OneAuth-->>Exam: 返回用户身份
 ```
 
----
-
-## 📁 目录结构
+## 项目结构
 
 ```text
 exam/
-├── backend/                  # FastAPI 后端源码
+├── backend/
 │   ├── app/
-│   │   ├── api/v1/          # 业务接口 (用户/题库/试卷/考务/阅卷)
-│   │   ├── core/            # 核心配置、数据库引擎与安全加密
-│   │   ├── models/          # SQLAlchemy 数据模型定义
-│   │   └── services/        # 核心业务逻辑 (OneAuth 对接、自动批改)
-│   ├── requirements.txt     # Python 依赖清单
-│   └── uploads/             # 上传的试题附件/图片存储目录
-├── frontend/                 # Vue 3 前端源码
+│   │   ├── api/v1/       # API 路由
+│   │   ├── core/         # 配置、数据库与安全逻辑
+│   │   ├── models/       # SQLAlchemy 模型
+│   │   └── services/     # 业务服务
+│   ├── tests/
+│   └── requirements.txt
+├── frontend/
+│   ├── public/
 │   ├── src/
-│   │   ├── api/             # 请求封装与接口列表
-│   │   ├── views/           # 页面 (登录/考务/试卷编辑/答题/组织管理)
-│   │   └── router/          # 路由守卫与导航定义
-│   ├── package.json         # 前端依赖配置
-│   └── vite.config.js       # Vite 打包配置
-├── Dockerfile                # 多阶段构建生产镜像 Dockerfile
-├── docker-compose.yml        # Docker 编排定义 (MySQL + App)
-├── .env.example              # 环境变量配置模板
-├── deploy.sh                 # 生产运维管理脚本 (start/stop/logs/backup)
-├── start.sh                  # 本地无 Docker 开发调试脚本
-└── README.md                 # 部署与使用文档
+│   │   ├── api/
+│   │   ├── router/
+│   │   ├── stores/
+│   │   └── views/
+│   └── package.json
+├── docker-compose.yml
+├── Dockerfile
+├── deploy.sh
+├── start.cmd
+├── start.ps1
+└── start.sh
 ```
+
+## 常见问题
+
+### 端口已被占用
+
+本地开发可指定其他端口：
+
+```powershell
+.\start.cmd -BackendPort 18080 -FrontendPort 15173
+```
+
+Docker 部署可修改 `.env` 中的 `PORT` 和 `MYSQL_PORT`。
+
+### 前端能打开，但接口请求失败
+
+确认后端已启动，并检查 `frontend/vite.config.js` 的代理目标。本地一键脚本会自动把前端代理指向本次使用的后端端口。
+
+### Docker 构建拉取镜像超时
+
+先确认服务器能够访问 Docker Hub：
+
+```bash
+curl -I --connect-timeout 15 https://registry-1.docker.io/v2/
+```
+
+若连接超时，请配置可用的镜像加速器或网络代理后重新执行 `./deploy.sh start`。
+
+### 查看启动日志
+
+本地脚本的日志位于项目根目录 `.run/`：
+
+```text
+.run/backend.out.log
+.run/backend.err.log
+.run/frontend.out.log
+.run/frontend.err.log
+```
+
+Docker 环境使用：
+
+```bash
+./deploy.sh logs-all
+```
+
+## 开发检查
+
+提交前建议至少执行：
+
+```bash
+cd frontend
+npm run build
+```
+
+```bash
+cd backend
+python -m pytest
+```
+
+## License
+
+如需对外发布或商业分发，请先在仓库中补充适用的许可证文件。

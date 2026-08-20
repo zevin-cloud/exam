@@ -9,6 +9,7 @@ frontend.log
 
 # Databases
 *.db
+*.db-*
 *.sqlite
 *.sqlite3
 

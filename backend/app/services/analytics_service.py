@@ -1,26 +1,191 @@
 import json
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, or_
 from app.models.exam_record import ExamRecord, ExamAnswerDetail, ExamRecordStatus
 from app.models.exam import ExamTask
 from app.models.user import User, Department
 from app.schemas.analytics_schema import (
     AnalyticsReportOut, OverviewStats, DeptPassRateItem, 
     WrongQuestionItem, KnowledgeRadarItem, ScoreDistributionItem,
-    CandidateRankItem, ExamInfoBrief
+    CandidateRankItem, ExamInfoBrief, ScoreRecordItem, ScoreSearchOut, ScoreSearchSummary
+)
+from app.services.exam_record_service import (
+    FINISHED_RECORD_STATUSES,
+    latest_finished_record_ids_subquery,
 )
 
 class AnalyticsService:
     @staticmethod
+    def department_subtree_ids(db: Session, department_id: int) -> List[int]:
+        """返回指定部门及全部子孙部门 ID，并防止异常循环层级导致死循环。"""
+        departments = db.query(Department.id, Department.parent_id).all()
+        children_map: Dict[int, List[int]] = {}
+        for dept_id, parent_id in departments:
+            if parent_id is not None:
+                children_map.setdefault(parent_id, []).append(dept_id)
+
+        collected = []
+        seen = set()
+        stack = [department_id]
+        while stack:
+            current_id = stack.pop()
+            if current_id in seen:
+                continue
+            seen.add(current_id)
+            collected.append(current_id)
+            stack.extend(children_map.get(current_id, []))
+        return collected
+
+    @staticmethod
+    def search_score_records(
+        db: Session,
+        exam_task_id: Optional[int] = None,
+        department_id: Optional[int] = None,
+        keyword: Optional[str] = None,
+        result_status: str = "all",
+        score_min: Optional[float] = None,
+        score_max: Optional[float] = None,
+        submitted_from: Optional[datetime] = None,
+        submitted_to: Optional[datetime] = None,
+        sort_by: str = "submit_desc",
+        page: int = 1,
+        page_size: int = 20,
+        export_all: bool = False,
+    ) -> ScoreSearchOut:
+        """按统一口径检索每位考生、每场考试最后一次有效答卷。"""
+        latest_ids = latest_finished_record_ids_subquery(db, exam_task_id=exam_task_id)
+        query = db.query(ExamRecord, User, ExamTask, Department).join(
+            latest_ids, ExamRecord.id == latest_ids.c.record_id
+        ).join(User, User.id == ExamRecord.user_id).join(
+            ExamTask, ExamTask.id == ExamRecord.exam_task_id
+        ).outerjoin(Department, Department.id == User.department_id)
+
+        if department_id is not None:
+            department_ids = AnalyticsService.department_subtree_ids(db, department_id)
+            query = query.filter(User.department_id.in_(department_ids))
+        if keyword and keyword.strip():
+            pattern = f"%{keyword.strip()}%"
+            query = query.filter(or_(
+                User.full_name.ilike(pattern),
+                User.username.ilike(pattern),
+                User.email.ilike(pattern),
+                ExamTask.title.ilike(pattern),
+            ))
+        if result_status == "passed":
+            query = query.filter(
+                ExamRecord.status == ExamRecordStatus.GRADED.value,
+                ExamRecord.is_passed == True,
+            )
+        elif result_status == "failed":
+            query = query.filter(
+                ExamRecord.status == ExamRecordStatus.GRADED.value,
+                ExamRecord.is_passed == False,
+            )
+        elif result_status == "pending":
+            query = query.filter(ExamRecord.status == ExamRecordStatus.SUBMITTED.value)
+
+        if score_min is not None:
+            query = query.filter(
+                ExamRecord.status == ExamRecordStatus.GRADED.value,
+                ExamRecord.total_score >= score_min,
+            )
+        if score_max is not None:
+            query = query.filter(
+                ExamRecord.status == ExamRecordStatus.GRADED.value,
+                ExamRecord.total_score <= score_max,
+            )
+        if submitted_from is not None:
+            query = query.filter(ExamRecord.submit_time >= submitted_from)
+        if submitted_to is not None:
+            query = query.filter(ExamRecord.submit_time <= submitted_to)
+
+        sort_columns = {
+            "score_desc": (ExamRecord.total_score.desc(), ExamRecord.submit_time.desc()),
+            "score_asc": (ExamRecord.total_score.asc(), ExamRecord.submit_time.desc()),
+            "duration_asc": (ExamRecord.duration_seconds.asc(), ExamRecord.submit_time.desc()),
+            "duration_desc": (ExamRecord.duration_seconds.desc(), ExamRecord.submit_time.desc()),
+            "submit_asc": (ExamRecord.submit_time.asc(),),
+            "submit_desc": (ExamRecord.submit_time.desc(),),
+        }
+        query = query.order_by(*sort_columns.get(sort_by, sort_columns["submit_desc"]))
+
+        summary_rows = query.with_entities(
+            ExamRecord.status,
+            ExamRecord.total_score,
+            ExamRecord.is_passed,
+        ).all()
+        total = len(summary_rows)
+        scored_rows = [row for row in summary_rows if row.status == ExamRecordStatus.GRADED.value]
+        passed_count = sum(1 for row in scored_rows if row.is_passed)
+        summary = ScoreSearchSummary(
+            matched_count=total,
+            scored_count=len(scored_rows),
+            pending_count=total - len(scored_rows),
+            passed_count=passed_count,
+            avg_score=round(
+                sum((row.total_score or 0.0) for row in scored_rows) / max(len(scored_rows), 1),
+                1,
+            ) if scored_rows else 0.0,
+        )
+
+        row_query = query if export_all else query.offset((page - 1) * page_size).limit(page_size)
+        result_rows = row_query.all()
+        attempt_counts = {
+            (task_id, user_id): count
+            for task_id, user_id, count in db.query(
+                ExamRecord.exam_task_id,
+                ExamRecord.user_id,
+                func.count(ExamRecord.id),
+            ).filter(
+                ExamRecord.status.in_(FINISHED_RECORD_STATUSES)
+            ).group_by(ExamRecord.exam_task_id, ExamRecord.user_id).all()
+        }
+
+        items = []
+        for record, user, task, department in result_rows:
+            items.append(ScoreRecordItem(
+                record_id=record.id,
+                exam_task_id=task.id,
+                exam_title=task.title,
+                student_id=user.id,
+                username=user.username,
+                student_name=user.full_name or user.username,
+                email=user.email,
+                department_id=department.id if department else None,
+                department_name=department.name if department else "未分配部门",
+                attempt_no=attempt_counts.get((task.id, user.id), 1),
+                status=record.status,
+                objective_score=record.objective_score or 0.0,
+                subjective_score=record.subjective_score or 0.0,
+                total_score=record.total_score or 0.0,
+                is_passed=bool(record.is_passed),
+                duration_seconds=record.duration_seconds or 0,
+                screen_switch_count=record.screen_switch_count or 0,
+                submit_time=record.submit_time,
+                graded_time=record.graded_time,
+            ))
+
+        return ScoreSearchOut(
+            items=items,
+            total=total,
+            page=1 if export_all else page,
+            page_size=total if export_all else page_size,
+            summary=summary,
+        )
+
+    @staticmethod
     def get_exam_analytics(exam_task_id: Optional[int], db: Session) -> AnalyticsReportOut:
         """生成考试分析大盘数据（支持全部或指定某场考试）"""
-        record_query = db.query(ExamRecord).filter(ExamRecord.status.in_([ExamRecordStatus.GRADED.value, ExamRecordStatus.SUBMITTED.value]))
+        latest_ids = latest_finished_record_ids_subquery(db, exam_task_id=exam_task_id)
+        record_query = db.query(ExamRecord).join(
+            latest_ids, ExamRecord.id == latest_ids.c.record_id
+        )
         current_task = None
         exam_info = None
 
         if exam_task_id:
-            record_query = record_query.filter(ExamRecord.exam_task_id == exam_task_id)
             current_task = db.query(ExamTask).filter(ExamTask.id == exam_task_id).first()
             if current_task:
                 exam_info = ExamInfoBrief(
@@ -30,18 +195,23 @@ class AnalyticsService:
                     pass_score=current_task.pass_score
                 )
 
-        graded_records = record_query.all()
-        total_records_count = len(graded_records)
+        latest_records = record_query.all()
+        graded_records = [
+            record for record in latest_records
+            if record.status == ExamRecordStatus.GRADED.value
+        ]
+        total_takers_count = len(latest_records)
+        scored_records_count = len(graded_records)
 
         # 1. 总体大盘数据
         total_exams = db.query(ExamTask).count() if not exam_task_id else 1
-        total_takers = total_records_count
+        total_takers = total_takers_count
         all_scores = [r.total_score for r in graded_records] if graded_records else [0.0]
-        avg_score = round(sum(all_scores) / max(total_records_count, 1), 1) if graded_records else 0.0
+        avg_score = round(sum(all_scores) / max(scored_records_count, 1), 1) if graded_records else 0.0
         max_score = max(all_scores) if graded_records else 0.0
         min_score = min(all_scores) if graded_records else 0.0
         passed_count = sum(1 for r in graded_records if r.is_passed)
-        pass_rate = round((passed_count / max(total_records_count, 1)) * 100.0, 1) if graded_records else 0.0
+        pass_rate = round((passed_count / max(scored_records_count, 1)) * 100.0, 1) if graded_records else 0.0
 
         # 应考人数与缺考统计
         total_users_count = db.query(User).filter(User.username != "admin").count()
@@ -75,22 +245,22 @@ class AnalyticsService:
             ScoreDistributionItem(
                 label="90-100分 (优秀)",
                 count=dist_90_100,
-                percentage=round((dist_90_100 / max(total_records_count, 1)) * 100.0, 1) if graded_records else 0.0
+                percentage=round((dist_90_100 / max(scored_records_count, 1)) * 100.0, 1) if graded_records else 0.0
             ),
             ScoreDistributionItem(
                 label="80-89分 (良好)",
                 count=dist_80_89,
-                percentage=round((dist_80_89 / max(total_records_count, 1)) * 100.0, 1) if graded_records else 0.0
+                percentage=round((dist_80_89 / max(scored_records_count, 1)) * 100.0, 1) if graded_records else 0.0
             ),
             ScoreDistributionItem(
                 label="60-79分 (合格)",
                 count=dist_60_79,
-                percentage=round((dist_60_79 / max(total_records_count, 1)) * 100.0, 1) if graded_records else 0.0
+                percentage=round((dist_60_79 / max(scored_records_count, 1)) * 100.0, 1) if graded_records else 0.0
             ),
             ScoreDistributionItem(
                 label="<60分 (待提升)",
                 count=dist_under_60,
-                percentage=round((dist_under_60 / max(total_records_count, 1)) * 100.0, 1) if graded_records else 0.0
+                percentage=round((dist_under_60 / max(scored_records_count, 1)) * 100.0, 1) if graded_records else 0.0
             )
         ]
 
@@ -125,11 +295,9 @@ class AnalyticsService:
         dept_stats.sort(key=lambda x: (x.pass_rate, x.avg_score), reverse=True)
 
         # 4. 错题率 Top 排行榜
-        detail_query = db.query(ExamAnswerDetail).join(ExamRecord).filter(
-            ExamRecord.status.in_([ExamRecordStatus.GRADED.value, ExamRecordStatus.SUBMITTED.value])
-        )
-        if exam_task_id:
-            detail_query = detail_query.filter(ExamRecord.exam_task_id == exam_task_id)
+        detail_query = db.query(ExamAnswerDetail).join(ExamRecord).join(
+            latest_ids, ExamRecord.id == latest_ids.c.record_id
+        ).filter(ExamRecord.status == ExamRecordStatus.GRADED.value)
 
         all_details = detail_query.all()
         q_map = {} # question_id -> {title, type, tag, total, wrong}

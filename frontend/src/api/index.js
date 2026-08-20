@@ -23,7 +23,9 @@ export const userApi = {
   importOneAuthUsers: (userKeys) => request.post('/users/import-oneauth-users', { user_keys: userKeys }),
   getSSOConfig: () => request.get('/users/sso-config'),
   updateSSOConfig: (data) => request.post('/users/sso-config', data),
-  batchUpdateUserRole: (data) => request.post('/users/batch-role', data)
+  testSSOConfig: (data) => request.post('/users/sso-config/test', data),
+  batchUpdateUserRole: (data) => request.post('/users/batch-role', data),
+  batchDeleteUsers: (userIds) => request.post('/users/batch-delete', { user_ids: userIds })
 }
 
 export const questionApi = {
@@ -60,6 +62,13 @@ export const examApi = {
   deleteTask: (id) => request.delete(`/exams/${id}`),
   startOrResumeExam: (id) => request.post(`/exams/${id}/start`),
   saveDraft: (recordId, data) => request.put(`/exams/records/${recordId}/draft`, data),
+  uploadAttachment: (recordId, questionId, formData) => request.post(
+    `/exams/records/${recordId}/questions/${questionId}/attachments`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  ),
+  getAttachment: (attachmentId) => request.get(`/exams/attachments/${attachmentId}`, { responseType: 'blob' }),
+  deleteAttachment: (attachmentId) => request.delete(`/exams/attachments/${attachmentId}`),
   submitExam: (recordId, data) => request.post(`/exams/records/${recordId}/submit`, data),
   getExamResult: (recordId) => request.get(`/exams/records/${recordId}/result`)
 }
@@ -78,5 +87,7 @@ export const analyticsApi = {
       params = param
     }
     return request.get('/analytics/dashboard', { params })
-  }
+  },
+  searchScores: (params) => request.get('/analytics/scores', { params }),
+  exportScores: (params) => request.get('/analytics/scores/export', { params, responseType: 'blob' })
 }

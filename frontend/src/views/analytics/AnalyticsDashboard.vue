@@ -20,7 +20,7 @@
             v-model="selectedExamId" 
             placeholder="全量考务综合汇总" 
             class="exam-select-box"
-            @change="fetchDashboard"
+            @change="handleExamChange"
           >
             <el-option :value="null" label="全量考务综合汇总 (All Exams)" />
             <el-option 
@@ -32,7 +32,7 @@
           </el-select>
         </div>
 
-        <el-button type="primary" plain @click="fetchDashboard" :loading="loading">
+        <el-button type="primary" plain @click="refreshAll" :loading="loading">
           刷新大盘
         </el-button>
       </div>
@@ -277,56 +277,139 @@
         </div>
       </div>
 
-      <!-- 第四行：学员成绩与答卷总榜表格 -->
-      <div class="app-card section-card">
-        <div class="section-header">
+      <!-- 第四行：可检索、可导出的成绩台账 -->
+      <div class="app-card section-card score-ledger">
+        <div class="ledger-heading">
           <div>
-            <h3 class="section-title">学员答卷总榜与考核明细表 (Top 15)</h3>
-            <p class="section-subtitle">直观展示员工考核成绩、及格情况、作答时长与交卷时间</p>
+            <div class="ledger-eyebrow"><SlidersHorizontal :size="13" /> 成绩检索台账</div>
+            <h3 class="section-title ledger-title">按人员、部门、成绩与时间交叉检索</h3>
+            <p class="section-subtitle">只统计每位考生每场考试最后一次有效答卷，当前筛选条件会原样应用到 Excel 导出。</p>
+          </div>
+          <el-button type="primary" :loading="exporting" @click="exportScores">
+            <Download :size="15" /> 导出当前结果
+          </el-button>
+        </div>
+
+        <div class="filter-rail">
+          <div class="filter-field filter-keyword">
+            <label>考生 / 账号 / 考试</label>
+            <el-input v-model="scoreFilters.keyword" clearable placeholder="输入姓名、账号或考试名称" @keyup.enter="searchScores" />
+          </div>
+          <div class="filter-field">
+            <label>所属部门（含下级）</label>
+            <el-select v-model="scoreFilters.department_id" clearable filterable placeholder="全部部门">
+              <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
+            </el-select>
+          </div>
+          <div class="filter-field">
+            <label>成绩状态</label>
+            <el-select v-model="scoreFilters.result_status">
+              <el-option label="全部有效答卷" value="all" />
+              <el-option label="及格" value="passed" />
+              <el-option label="未及格" value="failed" />
+              <el-option label="主观题待阅卷" value="pending" />
+            </el-select>
+          </div>
+          <div class="filter-field score-range-field">
+            <label>分数区间</label>
+            <div class="range-inputs">
+              <el-input-number v-model="scoreFilters.score_min" :min="0" :max="999" :controls="false" placeholder="最低" />
+              <span>—</span>
+              <el-input-number v-model="scoreFilters.score_max" :min="0" :max="999" :controls="false" placeholder="最高" />
+            </div>
+          </div>
+          <div class="filter-field date-filter-field">
+            <label>交卷时间</label>
+            <el-date-picker
+              v-model="scoreFilters.date_range"
+              type="daterange"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              value-format="YYYY-MM-DD HH:mm:ss"
+              :default-time="dateDefaultTimes"
+            />
+          </div>
+          <div class="filter-field">
+            <label>排序方式</label>
+            <el-select v-model="scoreFilters.sort_by">
+              <el-option label="最近交卷" value="submit_desc" />
+              <el-option label="成绩从高到低" value="score_desc" />
+              <el-option label="成绩从低到高" value="score_asc" />
+              <el-option label="用时最短" value="duration_asc" />
+              <el-option label="用时最长" value="duration_desc" />
+            </el-select>
+          </div>
+          <div class="filter-actions">
+            <el-button type="primary" @click="searchScores"><Search :size="15" /> 查询成绩</el-button>
+            <el-button @click="resetScoreFilters"><RotateCcw :size="14" /> 重置</el-button>
           </div>
         </div>
 
-        <el-table :data="dashboardData.candidate_rankings" stripe style="width: 100%" size="small">
-          <el-table-column prop="rank" label="排名" width="70" align="center">
+        <div class="ledger-summary">
+          <div><span>命中答卷</span><strong>{{ scoreData.summary.matched_count }}</strong></div>
+          <div><span>已出分</span><strong>{{ scoreData.summary.scored_count }}</strong></div>
+          <div><span>待阅卷</span><strong class="summary-amber">{{ scoreData.summary.pending_count }}</strong></div>
+          <div><span>及格人数</span><strong class="summary-green">{{ scoreData.summary.passed_count }}</strong></div>
+          <div><span>筛选后均分</span><strong class="summary-blue">{{ scoreData.summary.avg_score }}</strong></div>
+        </div>
+
+        <el-table :data="scoreData.items" v-loading="scoreLoading" stripe style="width: 100%" size="small" empty-text="当前条件下没有成绩记录">
+          <el-table-column label="考生" min-width="165" fixed="left">
             <template #default="{ row }">
-              <span class="rank-idx" :class="row.rank <= 3 ? 'rank-top' : ''">{{ row.rank }}</span>
+              <div class="student-cell">
+                <strong>{{ row.student_name }}</strong>
+                <span>{{ row.username }} · 第 {{ row.attempt_no }} 次</span>
+              </div>
             </template>
           </el-table-column>
-
-          <el-table-column prop="student_name" label="考生姓名" min-width="140">
+          <el-table-column prop="department_name" label="所属部门" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="exam_title" label="考试场次" min-width="210" show-overflow-tooltip />
+          <el-table-column label="成绩构成" width="160" align="center">
             <template #default="{ row }">
-              <span style="font-weight: 700; color: #1e293b;">{{ row.student_name }}</span>
+              <div v-if="row.status === 'GRADED'" class="score-cell">
+                <strong>{{ row.total_score }} 分</strong>
+                <span>客观 {{ row.objective_score }} / 主观 {{ row.subjective_score }}</span>
+              </div>
+              <div v-else class="score-cell is-pending">
+                <strong>待出分</strong>
+                <span>客观题暂计 {{ row.objective_score }} 分</span>
+              </div>
             </template>
           </el-table-column>
-
-          <el-table-column prop="department_name" label="所属部门" min-width="160" />
-
-          <el-table-column label="考核得分" width="120" align="center">
+          <el-table-column label="结果" width="105" align="center">
             <template #default="{ row }">
-              <span style="font-weight: 700; color: #2563eb; font-size: 14px;">{{ row.total_score }} 分</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="及格状态" width="110" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.is_passed ? 'success' : 'danger'" size="small">
-                {{ row.is_passed ? '及格达标' : '未达标' }}
+              <el-tag v-if="row.status !== 'GRADED'" type="warning" size="small">待阅卷</el-tag>
+              <el-tag v-else :type="row.is_passed ? 'success' : 'danger'" size="small">
+                {{ row.is_passed ? '及格' : '未及格' }}
               </el-tag>
             </template>
           </el-table-column>
-
-          <el-table-column label="作答用时" width="120" align="center">
-            <template #default="{ row }">
-              <span style="color: #475569; font-family: monospace;">{{ formatDuration(row.duration_seconds) }}</span>
-            </template>
+          <el-table-column label="作答用时" width="110" align="center">
+            <template #default="{ row }"><span class="mono-cell">{{ formatDuration(row.duration_seconds) }}</span></template>
           </el-table-column>
-
+          <el-table-column label="切屏" width="72" align="center" prop="screen_switch_count" />
           <el-table-column label="交卷时间" min-width="170" align="center">
+            <template #default="{ row }"><span class="date-cell">{{ formatDate(row.submit_time) }}</span></template>
+          </el-table-column>
+          <el-table-column label="操作" width="95" align="center" fixed="right">
             <template #default="{ row }">
-              <span style="font-size: 12px; color: #94a3b8;">{{ formatDate(row.submit_time) }}</span>
+              <el-button link type="primary" size="small" @click="viewPaper(row)">查看整卷</el-button>
             </template>
           </el-table-column>
         </el-table>
+
+        <div class="ledger-pagination">
+          <span>共 {{ scoreData.total }} 条</span>
+          <el-pagination
+            v-model:current-page="scorePage"
+            v-model:page-size="scorePageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="scoreData.total"
+            layout="sizes, prev, pager, next"
+            @change="fetchScores"
+          />
+        </div>
       </div>
     </template>
   </div>
@@ -334,10 +417,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { analyticsApi, examApi } from '@/api'
+import { useRouter } from 'vue-router'
+import { analyticsApi, examApi, userApi } from '@/api'
 import { 
-  BarChart3, Users, Target, TrendingUp, BookOpen, 
-  CheckCircle2, AlertCircle 
+  BarChart3, Users, Target, TrendingUp, BookOpen,
+  Download, RotateCcw, Search, SlidersHorizontal
 } from 'lucide-vue-next'
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -346,6 +430,28 @@ const loading = ref(true)
 const dashboardData = ref(null)
 const examTasks = ref([])
 const selectedExamId = ref(null)
+const router = useRouter()
+const departments = ref([])
+const scoreLoading = ref(false)
+const exporting = ref(false)
+const scorePage = ref(1)
+const scorePageSize = ref(20)
+const dateDefaultTimes = [new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)]
+const defaultScoreFilters = () => ({
+  keyword: '',
+  department_id: null,
+  result_status: 'all',
+  score_min: null,
+  score_max: null,
+  date_range: [],
+  sort_by: 'submit_desc'
+})
+const scoreFilters = ref(defaultScoreFilters())
+const scoreData = ref({
+  items: [],
+  total: 0,
+  summary: { matched_count: 0, scored_count: 0, pending_count: 0, passed_count: 0, avg_score: 0 }
+})
 
 const fetchExamTasks = async () => {
   try {
@@ -353,6 +459,14 @@ const fetchExamTasks = async () => {
     examTasks.value = res
   } catch (e) {
     //
+  }
+}
+
+const fetchDepartments = async () => {
+  try {
+    departments.value = await userApi.getDepartments()
+  } catch {
+    // 部门筛选不可用时仍可按其他维度查询。
   }
 }
 
@@ -366,6 +480,94 @@ const fetchDashboard = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const buildScoreParams = () => {
+  const filters = scoreFilters.value
+  const params = {
+    page: scorePage.value,
+    page_size: scorePageSize.value,
+    result_status: filters.result_status,
+    sort_by: filters.sort_by
+  }
+  if (selectedExamId.value) params.exam_task_id = selectedExamId.value
+  if (filters.department_id) params.department_id = filters.department_id
+  if (filters.keyword?.trim()) params.keyword = filters.keyword.trim()
+  if (filters.score_min !== null && filters.score_min !== undefined) params.score_min = filters.score_min
+  if (filters.score_max !== null && filters.score_max !== undefined) params.score_max = filters.score_max
+  if (filters.date_range?.length === 2) {
+    params.submitted_from = filters.date_range[0]
+    params.submitted_to = filters.date_range[1]
+  }
+  return params
+}
+
+const fetchScores = async () => {
+  scoreLoading.value = true
+  try {
+    scoreData.value = await analyticsApi.searchScores(buildScoreParams())
+  } finally {
+    scoreLoading.value = false
+  }
+}
+
+const searchScores = () => {
+  if (!validateScoreRange()) return
+  scorePage.value = 1
+  fetchScores()
+}
+
+const validateScoreRange = () => {
+  const { score_min: min, score_max: max } = scoreFilters.value
+  if (min !== null && max !== null && min > max) {
+    ElMessage.warning('最低分不能高于最高分')
+    return false
+  }
+  return true
+}
+
+const resetScoreFilters = () => {
+  scoreFilters.value = defaultScoreFilters()
+  scorePage.value = 1
+  fetchScores()
+}
+
+const handleExamChange = () => {
+  scorePage.value = 1
+  fetchDashboard()
+  fetchScores()
+}
+
+const refreshAll = () => {
+  fetchDashboard()
+  fetchScores()
+}
+
+const exportScores = async () => {
+  if (!validateScoreRange()) return
+  exporting.value = true
+  try {
+    const params = buildScoreParams()
+    delete params.page
+    delete params.page_size
+    const blob = await analyticsApi.exportScores(params)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+    anchor.href = url
+    anchor.download = `考试成绩明细_${timestamp}.xlsx`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    ElMessage.success(`已导出 ${scoreData.value.summary.matched_count} 条成绩记录`)
+  } finally {
+    exporting.value = false
+  }
+}
+
+const viewPaper = (row) => {
+  router.push({ path: `/exam/result/${row.record_id}`, query: { from: 'analytics' } })
 }
 
 const getProgressColor = (rate) => {
@@ -402,7 +604,9 @@ const formatDate = (isoStr) => {
 
 onMounted(() => {
   fetchExamTasks()
+  fetchDepartments()
   fetchDashboard()
+  fetchScores()
 })
 </script>
 
@@ -795,6 +999,115 @@ onMounted(() => {
   padding: 40px 0;
   color: #94a3b8;
   font-size: 12px;
+}
+
+/* 成绩检索台账：以审计台账式筛选轨道承接多维检索 */
+.score-ledger {
+  padding: 0;
+  overflow: hidden;
+  border-top: 3px solid #234e70;
+}
+.ledger-heading {
+  padding: 20px 22px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+.ledger-eyebrow {
+  margin-bottom: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #2f6f9f;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .08em;
+}
+.ledger-title { font-size: 16px; }
+.filter-rail {
+  padding: 15px 22px;
+  display: grid;
+  grid-template-columns: minmax(210px, 1.45fr) minmax(140px, .85fr) minmax(140px, .8fr) minmax(170px, 1fr);
+  gap: 12px 14px;
+  background: #f3f7fa;
+  border-top: 1px solid #e2eaf0;
+  border-bottom: 1px solid #e2eaf0;
+}
+.filter-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.filter-field label {
+  color: #5c6f82;
+  font-size: 11px;
+  font-weight: 650;
+}
+.filter-field :deep(.el-select),
+.filter-field :deep(.el-date-editor) { width: 100%; }
+.date-filter-field { grid-column: span 2; }
+.range-inputs { display: flex; align-items: center; gap: 6px; color: #93a3b3; }
+.range-inputs :deep(.el-input-number) { width: calc(50% - 10px); }
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.ledger-summary {
+  min-height: 60px;
+  padding: 10px 22px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid #edf1f5;
+  background: #fff;
+}
+.ledger-summary > div {
+  min-width: 120px;
+  padding: 2px 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-right: 1px solid #e7edf2;
+}
+.ledger-summary > div:first-child { padding-left: 0; }
+.ledger-summary > div:last-child { border-right: 0; }
+.ledger-summary span { color: #8291a2; font-size: 11px; }
+.ledger-summary strong { color: #26384b; font-size: 19px; font-variant-numeric: tabular-nums; }
+.ledger-summary .summary-amber { color: #b7791f; }
+.ledger-summary .summary-green { color: #14805e; }
+.ledger-summary .summary-blue { color: #276a9b; }
+.score-ledger :deep(.el-table) { padding: 0 12px; }
+.student-cell,
+.score-cell { display: flex; flex-direction: column; gap: 2px; }
+.student-cell strong { color: #23364b; font-size: 13px; }
+.student-cell span,
+.score-cell span { color: #91a0b1; font-size: 10px; }
+.score-cell strong { color: #246a9b; font-size: 14px; }
+.score-cell.is-pending strong { color: #b7791f; font-size: 12px; }
+.mono-cell { color: #4d6075; font-family: Consolas, monospace; font-size: 11px; }
+.date-cell { color: #8190a1; font-size: 11px; }
+.ledger-pagination {
+  padding: 14px 20px 17px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #8291a2;
+  font-size: 11px;
+  border-top: 1px solid #edf1f5;
+}
+@media (max-width: 1080px) {
+  .filter-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .date-filter-field { grid-column: span 1; }
+}
+@media (max-width: 680px) {
+  .ledger-heading { flex-direction: column; }
+  .filter-rail { grid-template-columns: 1fr; }
+  .ledger-summary { overflow-x: auto; }
+  .filter-actions { align-items: center; }
+  .ledger-pagination { align-items: flex-start; gap: 10px; flex-direction: column; }
 }
 
 .loading-state {

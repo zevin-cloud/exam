@@ -146,12 +146,11 @@
 
           <!-- 问答/简答题 (Textarea) -->
           <div v-else class="essay-box">
-            <el-input 
-              v-model="answers[elem.id]" 
-              type="textarea" 
-              :rows="4" 
-              placeholder="请输入您的详细论述与回答..." 
-              @input="onAnswerChange(elem.id)"
+            <MarkdownEssayEditor
+              v-model="answers[elem.id]"
+              :record-id="recordId"
+              :question-id="elem.id"
+              @change="onAnswerChange(elem.id)"
             />
           </div>
         </div>
@@ -215,6 +214,7 @@ import { examApi } from '@/api'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import confetti from 'canvas-confetti'
 import { Check, X, ShieldAlert } from 'lucide-vue-next'
+import MarkdownEssayEditor from '@/components/exam/MarkdownEssayEditor.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -239,6 +239,9 @@ const isQuestionAnswered = (qId) => {
   const val = answers.value[qId]
   if (val === undefined || val === null || val === '') return false
   if (Array.isArray(val) && val.length === 0) return false
+  if (typeof val === 'object' && val.format === 'markdown') {
+    return Boolean(String(val.content || '').trim() || val.attachments?.length)
+  }
   return true
 }
 

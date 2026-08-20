@@ -45,6 +45,9 @@ class UserBatchRoleUpdate(BaseModel):
     user_ids: List[int]
     role: str
 
+class UserBatchDelete(BaseModel):
+    user_ids: List[int]
+
 class UserLogin(BaseModel):
     username: str
     password: str

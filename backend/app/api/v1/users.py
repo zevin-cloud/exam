@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from app.core.database import get_db
 from app.models.user import User, Department, RoleEnum
 from app.schemas.user_schema import (
-    UserOut, UserCreate, UserUpdate, UserBatchRoleUpdate,
+    UserOut, UserCreate, UserUpdate, UserBatchRoleUpdate, UserBatchDelete,
     DepartmentOut, DepartmentCreate, DepartmentUpdate
 )
-from app.services.oneauth_service import oneauth_service
+from app.services.oneauth_service import oneauth_service, OneAuthSyncError
 from app.api.deps import require_teacher_or_admin, require_admin
 
 router = APIRouter()
@@ -279,6 +280,47 @@ def batch_update_user_role(payload: UserBatchRoleUpdate, db: Session = Depends(g
         "message": msg
     }
 
+@router.post("/batch-delete")
+def batch_delete_users(
+    payload: UserBatchDelete,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """批量删除成员，自动保护内置 admin 和当前登录管理员。"""
+    target_ids = list(set(payload.user_ids))
+    if not target_ids:
+        return {"success": True, "deleted_count": 0, "skipped_count": 0, "message": "未选择需要删除的成员"}
+
+    target_users = db.query(User).filter(User.id.in_(target_ids)).all()
+    protected_users = [
+        user for user in target_users
+        if user.username == "admin" or user.id == current_user.id
+    ]
+    deletable_users = [user for user in target_users if user not in protected_users]
+
+    try:
+        for user in deletable_users:
+            db.delete(user)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="部分成员已有考试、试卷或题库关联记录，无法直接删除，请先停用账号或清理关联数据",
+        )
+
+    deleted_count = len(deletable_users)
+    skipped_count = len(protected_users)
+    message = f"已删除 {deleted_count} 位成员"
+    if skipped_count:
+        message += f"，跳过 {skipped_count} 个受保护的管理员账号"
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "skipped_count": skipped_count,
+        "message": message,
+    }
+
 @router.delete("/{id}", dependencies=[Depends(require_admin)])
 def delete_user(id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == id).first()
@@ -314,10 +356,26 @@ def update_sso_config(payload: dict, db: Session = Depends(get_db)):
     oneauth_service.update_config(payload, db=db)
     return {"success": True, "message": "身份源连接配置已持久化保存", "data": oneauth_service.get_config(db=db)}
 
+@router.post("/sso-config/test", dependencies=[Depends(require_admin)])
+def test_sso_config(payload: dict, db: Session = Depends(get_db)):
+    """使用当前表单配置测试 OneAuth 网络、账号鉴权和组织接口，不保存配置。"""
+    try:
+        stats = oneauth_service.test_connection(payload, db)
+        return {
+            "success": True,
+            "message": f"连接成功：读取到 {stats['departments']} 个部门、{stats['users']} 位用户",
+            "data": stats,
+        }
+    except OneAuthSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
 @router.post("/sync-departments", dependencies=[Depends(require_admin)])
 def sync_oneauth_departments(db: Session = Depends(get_db)):
     """仅同步部门树（幂等增量：已存在部门自动跳过，不重复同步）"""
-    stats = oneauth_service.sync_departments_only(db)
+    try:
+        stats = oneauth_service.sync_departments_only(db)
+    except OneAuthSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
     return {
         "success": True,
         "message": f"部门同步完成：新增 {stats['synced_departments']} 个部门，跳过已有 {stats['skipped_departments']} 个部门",
@@ -327,7 +385,10 @@ def sync_oneauth_departments(db: Session = Depends(get_db)):
 @router.get("/oneauth-candidates", dependencies=[Depends(require_admin)])
 def get_oneauth_candidates(db: Session = Depends(get_db)):
     """拉取 OneAuth 待同步候选员工列表"""
-    candidates = oneauth_service.get_candidate_users(db)
+    try:
+        candidates = oneauth_service.get_candidate_users(db)
+    except OneAuthSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
     return {"success": True, "data": candidates}
 
 @router.post("/import-oneauth-users", dependencies=[Depends(require_admin)])
@@ -337,7 +398,10 @@ def import_selected_oneauth_users(payload: dict, db: Session = Depends(get_db)):
     if not selected_keys:
         raise HTTPException(status_code=400, detail="请至少勾选一位要同步的员工")
     
-    stats = oneauth_service.import_selected_users(selected_keys, db)
+    try:
+        stats = oneauth_service.import_selected_users(selected_keys, db)
+    except OneAuthSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
     return {
         "success": True,
         "message": f"成功同步导入 {stats['imported_users']} 位员工",
@@ -347,7 +411,10 @@ def import_selected_oneauth_users(payload: dict, db: Session = Depends(get_db)):
 @router.post("/sync-oneauth", dependencies=[Depends(require_admin)])
 def sync_oneauth_organization(db: Session = Depends(get_db)):
     """全量一键同步"""
-    stats = oneauth_service.sync_departments_and_users(db)
+    try:
+        stats = oneauth_service.sync_departments_and_users(db)
+    except OneAuthSyncError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
     return {
         "success": True,
         "message": f"同步成功：新增部门 {stats['synced_departments']} 个（跳过已有 {stats.get('skipped_departments', 0)} 个），同步员工 {stats['synced_users']} 位",

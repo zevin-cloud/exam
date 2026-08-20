@@ -3,6 +3,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import json
 import io
+from datetime import datetime
 from typing import List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from app.models.question import Question, QuestionBank, QuestionType, Difficulty
@@ -31,6 +32,90 @@ DIFFICULTY_MAP_CN_TO_EN = {
 }
 
 class ExcelService:
+    @staticmethod
+    def export_exam_scores_to_excel(items: List[Any], report_title: str = "考试成绩明细") -> bytes:
+        """导出当前检索条件命中的成绩台账。"""
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "成绩明细"
+
+        headers = [
+            "答卷ID", "考试场次", "考生姓名", "账号", "邮箱", "所属部门", "作答次数",
+            "客观题得分", "主观题得分", "总分", "结果", "阅卷状态", "作答用时(秒)",
+            "切屏次数", "交卷时间", "完成阅卷时间",
+        ]
+        last_column = get_column_letter(len(headers))
+        ws.merge_cells(f"A1:{last_column}1")
+        ws["A1"] = report_title
+        ws["A1"].font = Font(name="微软雅黑", size=16, bold=True, color="1E3A5F")
+        ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
+        ws.row_dimensions[1].height = 30
+        ws.merge_cells(f"A2:{last_column}2")
+        ws["A2"] = f"导出时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}    共 {len(items)} 条有效答卷（每人每场取最后一次已交卷记录）"
+        ws["A2"].font = Font(name="微软雅黑", size=10, color="64748B")
+
+        header_row = 4
+        for column, header in enumerate(headers, 1):
+            cell = ws.cell(row=header_row, column=column, value=header)
+            cell.fill = PatternFill(start_color="234E70", end_color="234E70", fill_type="solid")
+            cell.font = Font(name="微软雅黑", size=10, bold=True, color="FFFFFF")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        thin_border = Border(
+            left=Side(style="thin", color="D8E1EA"),
+            right=Side(style="thin", color="D8E1EA"),
+            top=Side(style="thin", color="D8E1EA"),
+            bottom=Side(style="thin", color="D8E1EA"),
+        )
+        for row_index, item in enumerate(items, header_row + 1):
+            is_graded = item.status == "GRADED"
+            values = [
+                item.record_id,
+                item.exam_title,
+                item.student_name,
+                item.username,
+                item.email or "",
+                item.department_name,
+                item.attempt_no,
+                item.objective_score,
+                item.subjective_score if is_graded else "",
+                item.total_score if is_graded else "",
+                ("及格" if item.is_passed else "未及格") if is_graded else "待出分",
+                "已完成阅卷" if is_graded else "主观题待阅卷",
+                item.duration_seconds,
+                item.screen_switch_count,
+                item.submit_time,
+                item.graded_time,
+            ]
+            for column, value in enumerate(values, 1):
+                cell = ws.cell(row=row_index, column=column, value=value)
+                cell.border = thin_border
+                cell.alignment = Alignment(vertical="center")
+                cell.font = Font(name="微软雅黑", size=10, color="334155")
+                if row_index % 2 == 0:
+                    cell.fill = PatternFill(start_color="F7FAFC", end_color="F7FAFC", fill_type="solid")
+            for date_column in (15, 16):
+                ws.cell(row=row_index, column=date_column).number_format = "yyyy-mm-dd hh:mm:ss"
+            result_cell = ws.cell(row=row_index, column=11)
+            if is_graded:
+                color = "047857" if item.is_passed else "BE123C"
+                fill = "ECFDF5" if item.is_passed else "FFF1F2"
+            else:
+                color, fill = "B45309", "FFFBEB"
+            result_cell.font = Font(name="微软雅黑", size=10, bold=True, color=color)
+            result_cell.fill = PatternFill(start_color=fill, end_color=fill, fill_type="solid")
+
+        widths = [10, 28, 15, 16, 24, 18, 10, 13, 13, 11, 11, 16, 15, 11, 21, 21]
+        for index, width in enumerate(widths, 1):
+            ws.column_dimensions[get_column_letter(index)].width = width
+        ws.freeze_panes = "A5"
+        ws.auto_filter.ref = f"A{header_row}:{last_column}{max(header_row, header_row + len(items))}"
+        ws.sheet_view.showGridLines = False
+
+        output = io.BytesIO()
+        wb.save(output)
+        return output.getvalue()
+
     @staticmethod
     def generate_template_bytes() -> bytes:
         """生成标准题库 Excel 导入模板"""

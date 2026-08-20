@@ -1,21 +1,56 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 import json
 import copy
+import os
+import uuid
 from datetime import datetime
 from app.core.database import get_db
+from app.core.config import settings
 from app.models.exam import ExamTask
 from app.models.paper import Paper
 from app.models.exam_record import ExamRecord, ExamAnswerDetail, ExamRecordStatus
+from app.models.exam_attachment import ExamAttachment
 from app.models.user import User, Department, RoleEnum
 from app.schemas.exam_schema import (
     ExamTaskCreate, ExamTaskOut, ExamDraftSave, ExamSubmit
 )
 from app.services.grading_service import grading_service
+from app.services.exam_answer_service import normalize_markdown_answers
+from app.services.exam_record_service import FINISHED_RECORD_STATUSES
 from app.api.deps import get_current_user, require_teacher_or_admin
 
 router = APIRouter()
+
+MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024
+MAX_ATTACHMENTS_PER_QUESTION = 6
+IMAGE_SIGNATURES = {
+    "image/jpeg": (".jpg", lambda data: data.startswith(b"\xff\xd8\xff")),
+    "image/png": (".png", lambda data: data.startswith(b"\x89PNG\r\n\x1a\n")),
+    "image/webp": (".webp", lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"),
+}
+
+
+def get_paper_element(record: ExamRecord, question_id: str, db: Session) -> Optional[Dict[str, Any]]:
+    task = db.query(ExamTask).filter(ExamTask.id == record.exam_task_id).first()
+    paper = db.query(Paper).filter(Paper.id == task.paper_id).first() if task else None
+    if not paper or not paper.schema_json:
+        return None
+    schema = json.loads(paper.schema_json)
+    for page in schema.get("pages", []):
+        for element in page.get("elements", []):
+            if str(element.get("id")) == str(question_id):
+                return element
+    return None
+
+
+def detect_image_type(data: bytes) -> Optional[tuple[str, str]]:
+    for content_type, (extension, validator) in IMAGE_SIGNATURES.items():
+        if validator(data):
+            return content_type, extension
+    return None
 
 # ==================== 考务管理 (HR/管理员) ====================
 
@@ -279,7 +314,10 @@ def get_exam_absentees(id: int, db: Session = Depends(get_db)):
 
     # 2. 查询已参加的人员 ID
     submitted_user_ids = set(
-        r.user_id for r in db.query(ExamRecord.user_id).filter(ExamRecord.exam_task_id == task.id).all()
+        user_id for (user_id,) in db.query(ExamRecord.user_id).filter(
+            ExamRecord.exam_task_id == task.id,
+            ExamRecord.status.in_(FINISHED_RECORD_STATUSES),
+        ).distinct().all()
     )
 
     # 3. 统计缺考人员
@@ -385,6 +423,129 @@ def start_or_resume_exam(
         "duration_seconds": in_progress_record.duration_seconds
     }
 
+
+@router.post("/records/{record_id}/questions/{question_id}/attachments")
+async def upload_exam_attachment(
+    record_id: int,
+    question_id: str,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """上传简答题图片。附件只对答卷本人及阅卷人员开放。"""
+    record = db.query(ExamRecord).filter(
+        ExamRecord.id == record_id,
+        ExamRecord.user_id == current_user.id,
+    ).first()
+    if not record or record.status != ExamRecordStatus.IN_PROGRESS.value:
+        raise HTTPException(status_code=400, detail="无效的考试记录，或答卷已经提交")
+
+    element = get_paper_element(record, question_id, db)
+    question_type = str((element or {}).get("type") or "").lower()
+    if not element or question_type not in {"textarea", "essay", "subjective"}:
+        raise HTTPException(status_code=400, detail="仅简答题支持上传图片")
+
+    attachment_count = db.query(ExamAttachment).filter(
+        ExamAttachment.record_id == record.id,
+        ExamAttachment.question_id == str(question_id),
+    ).count()
+    if attachment_count >= MAX_ATTACHMENTS_PER_QUESTION:
+        raise HTTPException(status_code=400, detail=f"每道题最多上传 {MAX_ATTACHMENTS_PER_QUESTION} 张图片")
+
+    content = await file.read(MAX_ATTACHMENT_SIZE + 1)
+    await file.close()
+    if not content:
+        raise HTTPException(status_code=400, detail="图片文件为空")
+    if len(content) > MAX_ATTACHMENT_SIZE:
+        raise HTTPException(status_code=400, detail="单张图片不能超过 5 MB")
+
+    detected = detect_image_type(content)
+    if not detected:
+        raise HTTPException(status_code=400, detail="仅支持 JPEG、PNG 或 WebP 图片")
+    content_type, extension = detected
+
+    relative_dir = os.path.join("exam_attachments", str(record.id))
+    absolute_dir = os.path.join(settings.UPLOAD_DIR, relative_dir)
+    os.makedirs(absolute_dir, exist_ok=True)
+    stored_name = os.path.join(relative_dir, f"{uuid.uuid4().hex}{extension}")
+    absolute_path = os.path.join(settings.UPLOAD_DIR, stored_name)
+    with open(absolute_path, "wb") as output:
+        output.write(content)
+
+    attachment = ExamAttachment(
+        record_id=record.id,
+        question_id=str(question_id),
+        uploader_id=current_user.id,
+        original_name=os.path.basename(file.filename or f"image{extension}")[:255],
+        stored_name=stored_name.replace("\\", "/"),
+        content_type=content_type,
+        size=len(content),
+    )
+    db.add(attachment)
+    db.commit()
+    db.refresh(attachment)
+    return {
+        "id": attachment.id,
+        "name": attachment.original_name,
+        "content_type": attachment.content_type,
+        "size": attachment.size,
+    }
+
+
+@router.get("/attachments/{attachment_id}")
+def get_exam_attachment(
+    attachment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    attachment = db.query(ExamAttachment).filter(ExamAttachment.id == attachment_id).first()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="图片不存在")
+    record = db.query(ExamRecord).filter(ExamRecord.id == attachment.record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="答卷不存在")
+    if record.user_id != current_user.id and current_user.role not in {
+        RoleEnum.SUPER_ADMIN.value,
+        RoleEnum.TEACHER.value,
+    }:
+        raise HTTPException(status_code=403, detail="无权查看该图片")
+
+    upload_root = os.path.abspath(settings.UPLOAD_DIR)
+    absolute_path = os.path.abspath(os.path.join(upload_root, attachment.stored_name))
+    if os.path.commonpath([upload_root, absolute_path]) != upload_root or not os.path.isfile(absolute_path):
+        raise HTTPException(status_code=404, detail="图片文件不存在")
+    return FileResponse(
+        absolute_path,
+        media_type=attachment.content_type,
+        filename=attachment.original_name,
+        content_disposition_type="inline",
+    )
+
+
+@router.delete("/attachments/{attachment_id}")
+def delete_exam_attachment(
+    attachment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    attachment = db.query(ExamAttachment).filter(ExamAttachment.id == attachment_id).first()
+    if not attachment:
+        raise HTTPException(status_code=404, detail="图片不存在")
+    record = db.query(ExamRecord).filter(
+        ExamRecord.id == attachment.record_id,
+        ExamRecord.user_id == current_user.id,
+    ).first()
+    if not record or record.status != ExamRecordStatus.IN_PROGRESS.value:
+        raise HTTPException(status_code=403, detail="只能删除本人未交卷答卷中的图片")
+
+    absolute_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, attachment.stored_name))
+    upload_root = os.path.abspath(settings.UPLOAD_DIR)
+    db.delete(attachment)
+    db.commit()
+    if os.path.commonpath([upload_root, absolute_path]) == upload_root and os.path.isfile(absolute_path):
+        os.remove(absolute_path)
+    return {"success": True}
+
 @router.put("/records/{record_id}/draft")
 def save_exam_draft(
     record_id: int, 
@@ -400,7 +561,8 @@ def save_exam_draft(
     if not record or record.status != ExamRecordStatus.IN_PROGRESS.value:
         raise HTTPException(status_code=400, detail="Invalid exam record or already submitted")
 
-    record.draft_json = json.dumps(payload.answers, ensure_ascii=False)
+    normalized_answers = normalize_markdown_answers(record, payload.answers, db)
+    record.draft_json = json.dumps(normalized_answers, ensure_ascii=False)
     record.screen_switch_count = payload.screen_switch_count
     record.duration_seconds = payload.duration_seconds
     db.commit()
@@ -426,8 +588,10 @@ def submit_exam(
     record.screen_switch_count = payload.screen_switch_count
     record.duration_seconds = payload.duration_seconds
 
+    normalized_answers = normalize_markdown_answers(record, payload.answers, db)
+
     # 执行判分
-    updated_record = grading_service.grade_exam_submission(record, payload.answers, db)
+    updated_record = grading_service.grade_exam_submission(record, normalized_answers, db)
     
     return {
         "success": True,
@@ -455,7 +619,13 @@ def get_exam_result(
         raise HTTPException(status_code=403, detail="Permission denied")
 
     task = db.query(ExamTask).filter(ExamTask.id == record.exam_task_id).first()
-    paper = db.query(Paper).filter(Paper.id == task.paper_id).first()
+    paper = db.query(Paper).filter(Paper.id == task.paper_id).first() if task else None
+    student = db.query(User).filter(User.id == record.user_id).first()
+    attempt_no = db.query(ExamRecord).filter(
+        ExamRecord.exam_task_id == record.exam_task_id,
+        ExamRecord.user_id == record.user_id,
+        ExamRecord.id <= record.id,
+    ).count()
     details = db.query(ExamAnswerDetail).filter(ExamAnswerDetail.record_id == record.id).all()
 
     # 检查是否允许查看答卷详情与试题解析
@@ -507,6 +677,9 @@ def get_exam_result(
             "id": record.id,
             "exam_title": task.title if task else "考试结果",
             "paper_title": paper.title if paper else "试卷",
+            "student_name": (student.full_name or student.username) if student else "未知考生",
+            "student_username": student.username if student else "",
+            "attempt_no": attempt_no,
             "total_paper_score": paper.total_score if paper else 100,
             "pass_score": task.pass_score if task else 60,
             "total_score": record.total_score,

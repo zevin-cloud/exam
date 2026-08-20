@@ -1,4 +1,3 @@
-import os
 import httpx
 import json
 import re
@@ -9,6 +8,10 @@ from app.core.database import SessionLocal
 from app.models.user import User, Department, RoleEnum
 from app.models.system_config import SystemConfig
 from app.core.security import get_password_hash
+
+class OneAuthSyncError(RuntimeError):
+    """OneAuth 连接或鉴权失败。"""
+
 
 class OneAuthService:
     """
@@ -28,8 +31,8 @@ class OneAuthService:
             config_map = {c.key: c.value for c in configs}
             return {
                 "server_url": config_map.get("oneauth_server_url") or settings.ONEAUTH_SERVER_URL.rstrip("/"),
-                "sync_username": config_map.get("oneauth_sync_username") or "zhengzewen-iam",
-                "sync_password": config_map.get("oneauth_sync_password") or "South@2025",
+                "sync_username": config_map.get("oneauth_sync_username") or "",
+                "sync_password": config_map.get("oneauth_sync_password") or "",
                 "client_id": config_map.get("oneauth_client_id") or settings.ONEAUTH_CLIENT_ID,
                 "client_secret": config_map.get("oneauth_client_secret") or settings.ONEAUTH_CLIENT_SECRET,
                 "redirect_uri": config_map.get("oneauth_redirect_uri") or settings.ONEAUTH_REDIRECT_URI,
@@ -164,103 +167,107 @@ class OneAuthService:
             print(f"[OneAuthService] SSO exchange error: {e}")
         return None
 
-    def fetch_remote_organization_data(self) -> Dict[str, Any]:
-        """拉取 OneAuth 组织架构与成员数据（优先直连 OneAuth 本地真实数据库或远端 HTTP API）"""
-        # 1. 优先读取同机 OneAuth 生产数据库
-        sso_db_path = "/root/code/OneAuth-main/sso-server/data/sso.db"
-        if os.path.exists(sso_db_path):
+    def fetch_remote_organization_data(
+        self,
+        db: Optional[Session] = None,
+        config_override: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """通过 OneAuth HTTP API 鉴权后拉取组织数据，不允许绕过密码直读数据库。"""
+        cfg = self.get_config(db)
+        if config_override:
+            cfg.update({k: v for k, v in config_override.items() if v is not None})
+
+        server_url = str(cfg.get("server_url") or "").strip().rstrip("/")
+        username = str(cfg.get("sync_username") or "").strip()
+        password = str(cfg.get("sync_password") or "")
+        if not server_url:
+            raise OneAuthSyncError("请先填写 OneAuth 服务地址")
+        if not username or not password:
+            raise OneAuthSyncError("请先填写组织同步用户名和密码")
+
+        candidate_urls = [server_url]
+        api_server_url = re.sub(r':5174$', ':8080', server_url)
+        if api_server_url != server_url:
+            candidate_urls.append(api_server_url)
+
+        auth_failed = False
+        connection_errors = []
+        for base_url in candidate_urls:
             try:
-                import sqlite3
-                conn = sqlite3.connect(sso_db_path)
-                cursor = conn.cursor()
-                
-                # 读取真实部门
-                dept_rows = cursor.execute("SELECT id, name, parent_id FROM sso_department;").fetchall()
-                all_depts = [{"id": str(d[0]), "name": d[1], "parent_id": str(d[2]) if d[2] else None} for d in dept_rows]
-                
-                # 读取真实用户
-                user_rows = cursor.execute("SELECT id, username, nickname, email, department_id, is_active FROM sso_user;").fetchall()
-                all_users = []
-                for u in user_rows:
-                    uname = u[1]
-                    all_users.append({
-                        "sso_user_id": str(u[0]),
-                        "username": uname,
-                        "full_name": u[2] or uname,
-                        "email": u[3] or f"{uname}@fit2cloud.com",
-                        "role": RoleEnum.SUPER_ADMIN.value if uname == "admin" else RoleEnum.STUDENT.value,
-                        "dept_sso_id": str(u[4]) if u[4] else None
-                    })
-                conn.close()
-                if all_depts or all_users:
-                    print(f"[OneAuthService] Loaded real OneAuth data from sso.db: {len(all_depts)} depts, {len(all_users)} users")
-                    return {"departments": all_depts, "users": all_users, "source": "OneAuth sso.db"}
-            except Exception as e:
-                print(f"[OneAuthService] Error reading sso.db: {e}")
+                with httpx.Client(timeout=6.0, trust_env=False) as client:
+                    login_resp = client.post(
+                        f"{base_url}/api/v1/auth/login",
+                        json={"username": username, "password": password},
+                    )
+                    if login_resp.status_code in (400, 401, 403):
+                        auth_failed = True
+                        continue
+                    if login_resp.status_code != 200:
+                        connection_errors.append(f"{base_url} 登录接口返回 HTTP {login_resp.status_code}")
+                        continue
 
-        # 2. 尝试从远程 HTTP API 拉取
-        candidate_urls = []
-        if self.server_url:
-            candidate_urls.append(self.server_url.rstrip("/"))
-            candidate_urls.append(re.sub(r':\d+$', ':8080', self.server_url.rstrip("/")))
-        candidate_urls.extend(["http://127.0.0.1:8080", "http://192.168.123.233:8080"])
-        
-        seen = set()
-        dedup_urls = [u for u in candidate_urls if u and not (u in seen or seen.add(u))]
+                    login_data = login_resp.json()
+                    token = (login_data.get("data") or {}).get("access_token") or login_data.get("access_token")
+                    if not token:
+                        connection_errors.append(f"{base_url} 登录成功但未返回 access_token")
+                        continue
 
-        for base_url in dedup_urls:
-            try:
-                with httpx.Client(timeout=4.0) as client:
-                    login_resp = client.post(f"{base_url}/api/v1/auth/login", json={
-                        "username": self.sync_username,
-                        "password": self.sync_password
-                    })
-                    if login_resp.status_code == 200:
-                        token = login_resp.json().get("data", {}).get("access_token")
-                        if token:
-                            headers = {"Authorization": f"Bearer {token}"}
-                            dept_resp = client.get(f"{base_url}/api/v1/departments/tree", headers=headers)
-                            all_depts = []
-                            if dept_resp.status_code == 200:
-                                tree_data = dept_resp.json().get("data", [])
-                                def traverse(nodes, parent_id=None):
-                                    for n in nodes:
-                                        all_depts.append({
-                                            "id": str(n["id"]),
-                                            "name": n["name"],
-                                            "parent_id": str(parent_id) if parent_id else None
-                                        })
-                                        if n.get("children"):
-                                            traverse(n["children"], n["id"])
-                                traverse(tree_data)
+                    headers = {"Authorization": f"Bearer {token}"}
+                    dept_resp = client.get(f"{base_url}/api/v1/departments/tree", headers=headers)
+                    user_resp = client.get(f"{base_url}/api/v1/users?page_size=500", headers=headers)
+                    if dept_resp.status_code != 200 or user_resp.status_code != 200:
+                        raise OneAuthSyncError(
+                            f"OneAuth 数据接口异常：部门 HTTP {dept_resp.status_code}，用户 HTTP {user_resp.status_code}"
+                        )
 
-                            user_resp = client.get(f"{base_url}/api/v1/users?page_size=500", headers=headers)
-                            items = []
-                            if user_resp.status_code == 200:
-                                u_data = user_resp.json().get("data", {})
-                                raw_items = u_data.get("items", []) if isinstance(u_data, dict) else u_data
-                                for item in raw_items:
-                                    items.append({
-                                        "sso_user_id": str(item.get("id") or item.get("username")),
-                                        "username": item.get("username"),
-                                        "full_name": item.get("name") or item.get("nickname") or item.get("username"),
-                                        "email": item.get("email") or f"{item.get('username')}@fit2cloud.com",
-                                        "role": RoleEnum.SUPER_ADMIN.value if item.get("username") == "admin" else RoleEnum.STUDENT.value,
-                                        "dept_sso_id": str(item.get("department_id") or item.get("dept_id") or "")
-                                    })
+                    tree_data = dept_resp.json().get("data", [])
+                    all_depts = []
 
-                            if all_depts or items:
-                                return {"departments": all_depts, "users": items, "source": f"remote ({base_url})"}
-            except Exception as e:
-                continue
+                    def traverse(nodes, parent_id=None):
+                        for node in nodes:
+                            all_depts.append({
+                                "id": str(node["id"]),
+                                "name": node["name"],
+                                "parent_id": str(parent_id) if parent_id else None,
+                            })
+                            if node.get("children"):
+                                traverse(node["children"], node["id"])
 
-        return {"departments": [], "users": [], "source": "empty"}
+                    traverse(tree_data)
+                    user_data = user_resp.json().get("data", {})
+                    raw_items = user_data.get("items", []) if isinstance(user_data, dict) else user_data
+                    items = [{
+                        "sso_user_id": str(item.get("id") or item.get("username")),
+                        "username": item.get("username"),
+                        "full_name": item.get("name") or item.get("nickname") or item.get("username"),
+                        "email": item.get("email") or f"{item.get('username')}@fit2cloud.com",
+                        "role": RoleEnum.SUPER_ADMIN.value if item.get("username") == "admin" else RoleEnum.STUDENT.value,
+                        "dept_sso_id": str(item.get("department_id") or item.get("dept_id") or ""),
+                    } for item in raw_items]
+                    return {"departments": all_depts, "users": items, "source": f"remote ({base_url})"}
+            except OneAuthSyncError:
+                raise
+            except (httpx.RequestError, ValueError) as exc:
+                connection_errors.append(f"{base_url}: {exc}")
 
-    def sync_departments_only(self, db: Session) -> Dict[str, int]:
+        if auth_failed:
+            raise OneAuthSyncError("OneAuth 同步账号或密码错误")
+        detail = connection_errors[-1] if connection_errors else "未知连接错误"
+        raise OneAuthSyncError(f"无法连接 OneAuth：{detail}")
+
+    def test_connection(self, config: Dict[str, Any], db: Session) -> Dict[str, Any]:
+        org_data = self.fetch_remote_organization_data(db=db, config_override=config)
+        return {
+            "source": org_data["source"],
+            "departments": len(org_data["departments"]),
+            "users": len(org_data["users"]),
+        }
+
+    def sync_departments_only(self, db: Session, org_data: Optional[Dict[str, Any]] = None) -> Dict[str, int]:
         """
         同步部门树（幂等：如果部门已存在则跳过，不重复同步）
         """
-        org_data = self.fetch_remote_organization_data()
+        org_data = org_data or self.fetch_remote_organization_data(db=db)
         synced_depts = 0
         skipped_depts = 0
 
@@ -296,7 +303,7 @@ class OneAuthService:
         """
         拉取 OneAuth 候选员工列表并标注是否已同步
         """
-        org_data = self.fetch_remote_organization_data()
+        org_data = self.fetch_remote_organization_data(db=db)
         remote_users = org_data.get("users", [])
         remote_depts = {str(d.get("id") or d.get("dept_id")): (d.get("name") or d.get("dept_name")) for d in org_data.get("departments", [])}
 
@@ -330,11 +337,11 @@ class OneAuthService:
             })
         return candidates
 
-    def import_selected_users(self, selected_keys: List[str], db: Session) -> Dict[str, int]:
+    def import_selected_users(self, selected_keys: List[str], db: Session, org_data: Optional[Dict[str, Any]] = None) -> Dict[str, int]:
         """
         精准导入用户勾选的员工列表
         """
-        org_data = self.fetch_remote_organization_data()
+        org_data = org_data or self.fetch_remote_organization_data(db=db)
         remote_users = org_data.get("users", [])
         
         # 确保部门已映射
@@ -389,10 +396,11 @@ class OneAuthService:
 
     def sync_departments_and_users(self, db: Session, org_data: Optional[Dict[str, Any]] = None) -> Dict[str, int]:
         """保留全量同步快捷入口"""
-        dept_stats = self.sync_departments_only(db)
-        candidates = self.get_candidate_users(db)
-        all_keys = [c["key"] for c in candidates]
-        user_stats = self.import_selected_users(all_keys, db)
+        org_data = org_data or self.fetch_remote_organization_data(db=db)
+        dept_stats = self.sync_departments_only(db, org_data=org_data)
+        remote_users = org_data.get("users", [])
+        all_keys = [str(u.get("username") or u.get("sso_user_id") or u.get("id")) for u in remote_users]
+        user_stats = self.import_selected_users(all_keys, db, org_data=org_data)
         return {
             "synced_departments": dept_stats["synced_departments"],
             "skipped_departments": dept_stats["skipped_departments"],

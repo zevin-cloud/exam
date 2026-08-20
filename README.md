@@ -103,6 +103,29 @@ npm run dev -- --host 0.0.0.0 --port 5173
 bash /root/code/exam/start.sh
 ```
 
+脚本会自动识别项目目录，不依赖固定安装路径。Windows 可直接使用：
+
+```powershell
+.\start.cmd
+# 或：.\start.ps1
+```
+
+停止脚本所启动的服务：
+
+```bash
+bash start.sh stop
+```
+
+```powershell
+.\start.cmd -Action stop
+```
+
+若默认端口已被其他程序占用，可在 Windows 指定其他端口：
+
+```powershell
+.\start.cmd -BackendPort 8010 -FrontendPort 5174
+```
+
 ---
 
 ## 📋 常用运维管理命令 (Docker 模式)

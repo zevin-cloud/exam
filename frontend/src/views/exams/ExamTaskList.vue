@@ -229,10 +229,14 @@
               multiple
               show-checkbox
               check-strictly
+              collapse-tags
+              collapse-tags-tooltip
+              :max-collapse-tags="3"
+              @check="handleDeptCheck"
               placeholder="请勾选允许参考的目标部门"
               class="w-full"
             />
-            <div class="text-xs text-slate-400 mt-1">选中的部门及其下级子部门的员工均有权限参与本次考试。</div>
+            <div class="text-xs text-slate-400 mt-1">勾选父部门会自动包含并勾选全部下级部门；保存时仅记录最上层授权范围。</div>
           </el-form-item>
 
           <!-- 按人员指定（所有已选人员全部平铺展示，不折叠） -->
@@ -522,6 +526,56 @@ const deptTreeData = computed(() => {
   return roots
 })
 
+const collectDeptSubtreeIds = (deptId) => {
+  const ids = []
+  const seen = new Set()
+  const stack = [deptId]
+  while (stack.length) {
+    const currentId = stack.pop()
+    if (seen.has(currentId)) continue
+    seen.add(currentId)
+    ids.push(currentId)
+    departments.value.forEach(dept => {
+      if (dept.parent_id === currentId) stack.push(dept.id)
+    })
+  }
+  return ids
+}
+
+const expandDeptSelections = (selectedIds) => {
+  const expanded = new Set()
+  ;(selectedIds || []).forEach(id => collectDeptSubtreeIds(id).forEach(childId => expanded.add(childId)))
+  return [...expanded]
+}
+
+const compressDeptSelections = (selectedIds) => {
+  const selected = new Set(selectedIds || [])
+  const deptMap = new Map(departments.value.map(dept => [dept.id, dept]))
+  return [...selected].filter(id => {
+    let parentId = deptMap.get(id)?.parent_id
+    const visited = new Set()
+    while (parentId && !visited.has(parentId)) {
+      if (selected.has(parentId)) return false
+      visited.add(parentId)
+      parentId = deptMap.get(parentId)?.parent_id
+    }
+    return true
+  })
+}
+
+const handleDeptCheck = (node, state) => {
+  const selected = new Set(state.checkedKeys || [])
+  const subtreeIds = collectDeptSubtreeIds(node.id)
+  if (selected.has(node.id)) {
+    subtreeIds.forEach(id => selected.add(id))
+  } else {
+    subtreeIds.forEach(id => selected.delete(id))
+  }
+  // 已选父部门不能单独排除某个子部门，确保界面与实际授权口径一致。
+  ;[...selected].forEach(id => collectDeptSubtreeIds(id).forEach(childId => selected.add(childId)))
+  form.value.target_dept_ids = [...selected]
+}
+
 const openCreateDialog = () => {
   isEdit.value = false
   editTaskId.value = null
@@ -574,7 +628,7 @@ const openEditDialog = (row) => {
     shuffle_options: row.shuffle_options,
     show_result_immediately: row.show_result_immediately,
     scope_type: row.scope_type || 'ALL',
-    target_dept_ids: row.target_dept_ids || [],
+    target_dept_ids: expandDeptSelections(row.target_dept_ids || []),
     target_user_ids: row.target_user_ids || []
   }
   dialogVisible.value = true
@@ -627,11 +681,17 @@ const submitSave = async () => {
 
   saving.value = true
   try {
+    const payload = {
+      ...form.value,
+      target_dept_ids: form.value.scope_type === 'DEPT'
+        ? compressDeptSelections(form.value.target_dept_ids)
+        : []
+    }
     if (isEdit.value) {
-      await examApi.updateTask(editTaskId.value, form.value)
+      await examApi.updateTask(editTaskId.value, payload)
       ElMessage.success('考务任务更新成功！')
     } else {
-      await examApi.createTask(form.value)
+      await examApi.createTask(payload)
       ElMessage.success('考试任务发布成功！')
     }
     dialogVisible.value = false

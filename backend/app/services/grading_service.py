@@ -5,8 +5,66 @@ from datetime import datetime
 from app.models.exam_record import ExamRecord, ExamAnswerDetail, ExamRecordStatus
 from app.models.exam import ExamTask
 from app.models.paper import Paper
+from app.services.exam_record_service import is_latest_finished_record
 
 class GradingService:
+    @staticmethod
+    def has_meaningful_answer(answer: Any) -> bool:
+        if answer is None:
+            return False
+        if isinstance(answer, str):
+            return bool(answer.strip())
+        if isinstance(answer, dict):
+            if answer.get("format") == "markdown":
+                return bool(str(answer.get("content") or "").strip() or answer.get("attachments"))
+            return bool(answer)
+        if isinstance(answer, (list, tuple, set)):
+            return bool(answer)
+        return True
+
+    @classmethod
+    def repair_blank_subjective_answers(cls, db: Session) -> int:
+        """幂等修复旧数据：空白主观题自动记 0，并完成已无需人工阅卷的答卷。"""
+        details = db.query(ExamAnswerDetail).filter(
+            ExamAnswerDetail.question_type.in_(["essay", "textarea", "Textarea", "Essay"]),
+            ExamAnswerDetail.is_graded == False,
+        ).all()
+        repaired = 0
+        affected_record_ids = set()
+        for detail in details:
+            try:
+                answer = json.loads(detail.user_answer_json) if detail.user_answer_json else None
+            except (TypeError, ValueError):
+                answer = detail.user_answer_json
+            if cls.has_meaningful_answer(answer):
+                continue
+            detail.actual_score = 0.0
+            detail.is_graded = True
+            affected_record_ids.add(detail.record_id)
+            repaired += 1
+
+        for record_id in affected_record_ids:
+            record = db.query(ExamRecord).filter(ExamRecord.id == record_id).first()
+            record_details = db.query(ExamAnswerDetail).filter(
+                ExamAnswerDetail.record_id == record_id
+            ).all()
+            if not record or not record_details or not all(item.is_graded for item in record_details):
+                continue
+            task = db.query(ExamTask).filter(ExamTask.id == record.exam_task_id).first()
+            record.subjective_score = sum(
+                item.actual_score or 0.0
+                for item in record_details
+                if item.question_type.lower() in ("essay", "textarea")
+            )
+            record.total_score = (record.objective_score or 0.0) + record.subjective_score
+            record.status = ExamRecordStatus.GRADED.value
+            record.is_passed = bool(task and record.total_score >= task.pass_score)
+            record.graded_time = record.graded_time or datetime.utcnow()
+
+        if repaired:
+            db.commit()
+        return repaired
+
     @staticmethod
     def extract_paper_elements(schema_json: str) -> List[Dict[str, Any]]:
         """从 SurveyKing 试卷 Schema JSON 中提取所有题目定义"""
@@ -35,7 +93,7 @@ class GradingService:
         elements = cls.extract_paper_elements(paper.schema_json)
         
         objective_total = 0.0
-        has_subjective = False
+        has_pending_subjective = False
         
         # 清除旧的答题明细（防止重考残留）
         db.query(ExamAnswerDetail).filter(ExamAnswerDetail.record_id == record.id).delete()
@@ -106,8 +164,9 @@ class GradingService:
 
             # 5. 简答/问答（主观题）
             else:
-                has_subjective = True
-                is_graded = False
+                # 未作答主观题直接记 0 分，不进入人工阅卷池。
+                is_graded = not cls.has_meaningful_answer(user_ans)
+                has_pending_subjective = has_pending_subjective or not is_graded
                 actual_score = 0.0 # 待考官打分
 
             # 创建单题明细
@@ -131,8 +190,8 @@ class GradingService:
         record.submit_time = datetime.utcnow()
         record.submit_json = json.dumps(user_answers, ensure_ascii=False)
 
-        if not has_subjective:
-            # 纯客观卷：秒出最终成绩并归档
+        if not has_pending_subjective:
+            # 纯客观卷或主观题均未作答：直接完成判分归档。
             record.subjective_score = 0.0
             record.total_score = objective_total
             record.status = ExamRecordStatus.GRADED.value
@@ -169,6 +228,8 @@ class GradingService:
         
         # 检查该试卷的所有主观题是否均已阅完
         record = db.query(ExamRecord).filter(ExamRecord.id == detail.record_id).first()
+        if not record or not is_latest_finished_record(record, db):
+            raise ValueError("该答卷不是考生本场考试最后一次有效答卷，不能继续计入最终成绩")
         all_details = db.query(ExamAnswerDetail).filter(ExamAnswerDetail.record_id == record.id).all()
         
         all_graded = all(d.is_graded for d in all_details)

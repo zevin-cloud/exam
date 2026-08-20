@@ -61,3 +61,41 @@ class AnalyticsReportOut(BaseModel):
     knowledge_radar: List[KnowledgeRadarItem]
     score_distribution: List[ScoreDistributionItem] = []
     candidate_rankings: List[CandidateRankItem] = []
+
+
+class ScoreRecordItem(BaseModel):
+    record_id: int
+    exam_task_id: int
+    exam_title: str
+    student_id: int
+    username: str
+    student_name: str
+    email: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: str
+    attempt_no: int = 1
+    status: str
+    objective_score: float = 0.0
+    subjective_score: float = 0.0
+    total_score: float = 0.0
+    is_passed: bool = False
+    duration_seconds: int = 0
+    screen_switch_count: int = 0
+    submit_time: Optional[Any] = None
+    graded_time: Optional[Any] = None
+
+
+class ScoreSearchSummary(BaseModel):
+    matched_count: int = 0
+    scored_count: int = 0
+    pending_count: int = 0
+    passed_count: int = 0
+    avg_score: float = 0.0
+
+
+class ScoreSearchOut(BaseModel):
+    items: List[ScoreRecordItem] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+    summary: ScoreSearchSummary

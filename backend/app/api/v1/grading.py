@@ -9,6 +9,7 @@ from app.models.user import User, Department
 from app.schemas.exam_schema import GradeItemSubmit
 from app.services.grading_service import grading_service
 from app.api.deps import require_teacher_or_admin, get_current_user
+from app.services.exam_record_service import latest_finished_record_ids_subquery
 
 router = APIRouter()
 
@@ -20,7 +21,10 @@ def list_pending_grading_items(
     db: Session = Depends(get_db)
 ):
     """获取主观题答卷列表（支持按考试、按批阅状态、按学员检索与指定查看）"""
-    query = db.query(ExamAnswerDetail).join(ExamRecord).filter(
+    latest_ids = latest_finished_record_ids_subquery(db, exam_task_id=exam_task_id)
+    query = db.query(ExamAnswerDetail).join(ExamRecord).join(
+        latest_ids, ExamRecord.id == latest_ids.c.record_id
+    ).filter(
         ExamAnswerDetail.question_type.in_(["essay", "textarea", "Textarea", "Essay"])
     )
     
@@ -28,9 +32,6 @@ def list_pending_grading_items(
         query = query.filter(ExamAnswerDetail.is_graded == False)
     elif status == "graded":
         query = query.filter(ExamAnswerDetail.is_graded == True)
-
-    if exam_task_id:
-        query = query.filter(ExamRecord.exam_task_id == exam_task_id)
 
     query = query.order_by(ExamAnswerDetail.id.desc())
     details = query.all()
@@ -75,7 +76,7 @@ def list_pending_grading_items(
             "actual_score": d.actual_score,
             "teacher_comment": d.teacher_comment or "",
             "is_graded": d.is_graded,
-            "user_answer": u_ans if isinstance(u_ans, str) else json.dumps(u_ans, ensure_ascii=False),
+            "user_answer": u_ans,
             "reference_answer": c_ans[0] if c_ans else "请出题人按论述完整度与关键技术点酌情给分。",
             "knowledge_tag": d.knowledge_tag or "专业素养",
             "submit_time": record.submit_time if record else None

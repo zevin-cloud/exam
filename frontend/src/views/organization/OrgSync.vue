@@ -174,6 +174,11 @@
                 </template>
               </el-dropdown>
 
+              <el-button type="danger" plain :loading="batchDeleteLoading" @click="handleBatchDeleteUsers">
+                <Trash2 :size="15" class="mr-1.5" />
+                批量删除
+              </el-button>
+
               <el-button @click="clearUserSelection">
                 取消选择
               </el-button>
@@ -518,6 +523,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
+        <el-button type="success" plain :loading="testingConfig" @click="testSSOConfig">测试连接</el-button>
         <el-button @click="ssoConfigVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingConfig" @click="saveSSOConfig(false)">保存配置</el-button>
       </template>
@@ -531,7 +537,7 @@ import { userApi } from '@/api'
 import { 
   Settings, Building2, UserPlus, RefreshCw, 
   Search, Folder, FolderTree, AlertTriangle,
-  ShieldCheck, ChevronDown, Users
+  ShieldCheck, ChevronDown, Users, Trash2
 } from 'lucide-vue-next'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -556,6 +562,7 @@ const pageSize = ref(10)
 const selectedUsers = ref([])
 const userTableRef = ref(null)
 const batchRoleLoading = ref(false)
+const batchDeleteLoading = ref(false)
 
 // 部门新建/编辑
 const deptDialogVisible = ref(false)
@@ -587,6 +594,7 @@ const userForm = ref({
 // SSO 配置
 const ssoConfigVisible = ref(false)
 const savingConfig = ref(false)
+const testingConfig = ref(false)
 const currentAutoRedirectUri = computed(() => {
   if (typeof window !== 'undefined') {
     return `${window.location.origin}/auth/callback`
@@ -928,7 +936,7 @@ const handleSyncDepartmentsOnly = async () => {
     ElMessage.success(res.message || '部门架构同步完成')
     fetchAll()
   } catch (e) {
-    ElMessage.error('同步部门失败')
+    ElMessage.error(e.response?.data?.detail || '同步部门失败')
   } finally {
     syncingDept.value = false
   }
@@ -945,7 +953,7 @@ const openCandidateUsersDialog = async () => {
     candidateKeyword.value = ''
     candidateDialogVisible.value = true
   } catch (e) {
-    ElMessage.error('获取 OneAuth 成员候选列表失败')
+    ElMessage.error(e.response?.data?.detail || '获取 OneAuth 成员候选列表失败')
   } finally {
     loadingCandidates.value = false
   }
@@ -1002,7 +1010,7 @@ const confirmImportCandidates = async () => {
     candidateDialogVisible.value = false
     fetchAll()
   } catch (e) {
-    ElMessage.error('导入员工失败')
+    ElMessage.error(e.response?.data?.detail || '导入员工失败')
   } finally {
     importingUsers.value = false
   }
@@ -1016,7 +1024,7 @@ const handleSyncAllData = async () => {
     ElMessage.success(res.message || '全量架构与员工同步完成')
     fetchAll()
   } catch (e) {
-    ElMessage.error('同步失败')
+    ElMessage.error(e.response?.data?.detail || '同步失败')
   } finally {
     syncingAll.value = false
   }
@@ -1048,6 +1056,54 @@ const saveSSOConfig = async (triggerSync = false) => {
     }
   } finally {
     savingConfig.value = false
+  }
+}
+
+const handleBatchDeleteUsers = () => {
+  if (!selectedUsers.value.length) return
+  const count = selectedUsers.value.length
+  const userIds = selectedUsers.value.map(user => user.id)
+  ElMessageBox.confirm(
+    `确定永久删除选中的 ${count} 位成员吗？删除后无法恢复；内置管理员和当前登录账号会被自动保护。`,
+    '批量删除成员',
+    {
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    }
+  ).then(async () => {
+    batchDeleteLoading.value = true
+    try {
+      const res = await userApi.batchDeleteUsers(userIds)
+      ElMessage.success(res.message || `已删除 ${count} 位成员`)
+      clearUserSelection()
+      await fetchAll()
+    } catch (e) {
+      ElMessage.error(e.response?.data?.detail || '批量删除失败')
+    } finally {
+      batchDeleteLoading.value = false
+    }
+  }).catch(() => {})
+}
+
+const testSSOConfig = async () => {
+  if (!ssoConfigForm.value.server_url) {
+    ElMessage.warning('请输入身份源服务地址')
+    return
+  }
+  if (!ssoConfigForm.value.sync_username || !ssoConfigForm.value.sync_password) {
+    ElMessage.warning('请输入同步用户名和密码')
+    return
+  }
+  testingConfig.value = true
+  try {
+    const res = await userApi.testSSOConfig(ssoConfigForm.value)
+    ElMessage.success(res.message || 'OneAuth 连接测试成功')
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || 'OneAuth 连接测试失败')
+  } finally {
+    testingConfig.value = false
   }
 }
 

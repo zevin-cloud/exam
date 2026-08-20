@@ -101,7 +101,7 @@
 
           <el-table-column label="考生作答摘要" min-width="240" show-overflow-tooltip>
             <template #default="{ row }">
-              <span class="answer-preview">{{ row.user_answer || '(考生未作答)' }}</span>
+              <span class="answer-preview">{{ answerSummary(row.user_answer) }}</span>
             </template>
           </el-table-column>
 
@@ -124,12 +124,13 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="操作" width="130" align="center" fixed="right">
+          <el-table-column label="操作" width="180" align="center" fixed="right">
             <template #default="{ row }">
               <div class="table-ops">
                 <el-button link type="primary" size="small" @click="openGradingDrawer(row)">
                   {{ row.is_graded ? '复核打分' : '即时评分' }}
                 </el-button>
+                <el-button link type="info" size="small" @click="viewFullPaper(row)">查看整卷</el-button>
               </div>
             </template>
           </el-table-column>
@@ -176,8 +177,8 @@
           <!-- 考生作答 -->
           <div class="mb-4">
             <div class="text-xs font-bold text-slate-500 mb-1">考生作答内容：</div>
-            <div class="text-sm text-slate-800 bg-blue-50/30 p-3.5 rounded border border-blue-100 font-mono whitespace-pre-wrap leading-relaxed">
-              {{ activeDetail.user_answer || '(考生未填写任何文字)' }}
+            <div class="answer-document text-sm text-slate-800 bg-blue-50/30 p-3.5 rounded border border-blue-100 leading-relaxed">
+              <MarkdownAnswer :answer="activeDetail.user_answer" empty-text="（考生未填写任何内容）" />
             </div>
           </div>
 
@@ -240,8 +241,8 @@
 
         <div class="mb-3">
           <div class="text-xs font-bold text-slate-500 mb-1">考生作答内容：</div>
-          <div class="p-3 bg-blue-50/30 rounded border border-blue-100 font-mono text-sm text-slate-800 whitespace-pre-wrap">
-            {{ currentPipelineItem.user_answer || '(未填写内容)' }}
+          <div class="answer-document p-3 bg-blue-50/30 rounded border border-blue-100 text-sm text-slate-800">
+            <MarkdownAnswer :answer="currentPipelineItem.user_answer" empty-text="（未填写内容）" />
           </div>
         </div>
 
@@ -277,8 +278,12 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { gradingApi, examApi } from '@/api'
 import { ElMessage } from 'element-plus'
+import MarkdownAnswer from '@/components/exam/MarkdownAnswer.vue'
+
+const router = useRouter()
 
 const loading = ref(false)
 const items = ref([])
@@ -314,6 +319,17 @@ const pendingCount = computed(() => {
 const currentPipelineItem = computed(() => {
   return pendingItemsList.value[currentPipelineIndex.value] || null
 })
+
+const answerSummary = (answer) => {
+  if (typeof answer === 'string') return answer.trim() || '(考生未作答)'
+  const content = String(answer?.content || '').replace(/!\[[^\]]*\]\(attachment:\d+\)/g, '[图片]').trim()
+  if (content) return content
+  return answer?.attachments?.length ? `[${answer.attachments.length} 张图片]` : '(考生未作答)'
+}
+
+const viewFullPaper = (row) => {
+  router.push({ path: `/exam/result/${row.record_id}`, query: { from: 'grading' } })
+}
 
 const fetchExamTasks = async () => {
   try {

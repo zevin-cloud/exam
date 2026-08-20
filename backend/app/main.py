@@ -13,6 +13,7 @@ from app.models.question import QuestionBank, Question, QuestionType, Difficulty
 from app.models.paper import Paper
 from app.models.exam import ExamTask
 from app.models.exam_record import ExamRecord, ExamAnswerDetail, ExamRecordStatus
+from app.services.grading_service import grading_service
 from app.api.v1 import api_router
 
 # 自动创建表
@@ -430,6 +431,12 @@ def init_seed_data():
 
 # 启动时执行数据初始化
 init_seed_data()
+
+# 幂等修复旧版本产生的“空白主观题待人工阅卷”记录。
+with SessionLocal() as repair_db:
+    repaired_blank_answers = grading_service.repair_blank_subjective_answers(repair_db)
+    if repaired_blank_answers:
+        print(f"[Migration] 已自动修复 {repaired_blank_answers} 条空白主观题记录")
 
 # =========================================================
 # 前端一体化静态托管 (SPA 模式，无需 Nginx)

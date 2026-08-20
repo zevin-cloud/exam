@@ -107,23 +107,37 @@
         </div>
 
         <div class="header-right">
-          <div class="user-badge">
-            <div class="avatar-circle">{{ userStore.fullName ? userStore.fullName.charAt(0) : 'U' }}</div>
-            <div class="user-meta">
-              <div class="name-row">
-                <span class="user-name">{{ userStore.fullName }}</span>
-                <el-tag size="small" :type="getRoleTagType(userStore.role)" effect="light">
-                  {{ getRoleName(userStore.role) }}
-                </el-tag>
+          <el-dropdown
+            trigger="click"
+            placement="bottom-end"
+            popper-class="account-dropdown"
+            @command="handleAccountCommand"
+          >
+            <button class="account-trigger" type="button" aria-label="打开账户菜单">
+              <div class="avatar-circle" aria-hidden="true">
+                {{ userStore.fullName ? userStore.fullName.charAt(0) : 'U' }}
+                <span class="avatar-status"></span>
               </div>
-              <div class="dept-text">{{ userStore.deptName || '企业成员' }}</div>
-            </div>
-          </div>
+              <div class="user-meta">
+                <span class="user-name">{{ userStore.fullName }}</span>
+                <div class="identity-line">
+                  <span class="role-label">{{ getRoleName(userStore.role) }}</span>
+                  <span class="identity-divider" aria-hidden="true"></span>
+                  <span class="dept-text">{{ userStore.deptName || '企业成员' }}</span>
+                </div>
+              </div>
+              <ChevronDown :size="15" class="account-chevron" aria-hidden="true" />
+            </button>
 
-          <el-button type="danger" link @click="handleLogout">
-            <LogOut :size="15" class="mr-1" />
-            退出
-          </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="logout">
+                  <LogOut :size="15" />
+                  <span>退出登录</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </header>
 
@@ -139,7 +153,7 @@
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Crown, GraduationCap, User, LogOut } from 'lucide-vue-next'
+import { ChevronDown, LogOut } from 'lucide-vue-next'
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -150,17 +164,16 @@ const handleLogout = () => {
   ElMessage.info('已退出登录')
 }
 
+const handleAccountCommand = (command) => {
+  if (command === 'logout') handleLogout()
+}
+
 const getRoleName = (role) => {
   if (role === 'super_admin') return '超级管理员'
   if (role === 'teacher') return '出题/阅卷人'
   return '考生/员工'
 }
 
-const getRoleTagType = (role) => {
-  if (role === 'super_admin') return 'danger'
-  if (role === 'teacher') return 'warning'
-  return 'success'
-}
 </script>
 
 <style scoped>
@@ -327,41 +340,135 @@ const getRoleTagType = (role) => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 20px;
 }
 
-.user-badge {
+.account-trigger {
+  appearance: none;
+  min-width: 0;
+  padding: 6px 8px 6px 7px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
   display: flex;
   align-items: center;
   gap: 10px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
+
+.account-trigger:hover,
+.account-trigger:focus-visible {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.account-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
 .avatar-circle {
-  width: 36px;
-  height: 36px;
+  position: relative;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   border-radius: 50%;
   background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 14px;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 3px 10px rgba(59, 130, 246, 0.24);
 }
 
-.user-meta .name-row {
+.avatar-status {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.user-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.user-meta .user-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  line-height: 1.2;
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.identity-line {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.user-meta .user-name {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #1e293b;
-}
-.user-meta .dept-text {
   font-size: 11px;
+  line-height: 1.2;
   color: #64748b;
+}
+
+.role-label {
+  color: #2563eb;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.identity-divider {
+  width: 3px;
+  height: 3px;
+  flex: 0 0 3px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+
+.user-meta .dept-text {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-chevron {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  transition: transform 0.16s ease, color 0.16s ease;
+}
+
+.account-trigger:hover .account-chevron {
+  color: #475569;
+}
+
+@media (max-width: 720px) {
+  .top-header {
+    padding: 0 14px;
+  }
+
+  .user-meta,
+  .account-chevron {
+    display: none;
+  }
+
+  .account-trigger {
+    padding: 5px;
+  }
 }
 
 .content-body {

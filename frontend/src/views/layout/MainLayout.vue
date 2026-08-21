@@ -1,480 +1,236 @@
 <template>
-  <div class="layout-container">
-    <!-- 侧边栏 -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <div class="logo-box">
-          <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" />
-            <path d="M6 6h10" />
-            <path d="M6 10h10" />
-            <path d="M6 14h6" />
-          </svg>
+  <a-layout class="exam-layout">
+    <a-layout-sider
+      class="exam-sider"
+      :width="248"
+      :collapsed-width="64"
+      :collapsed="collapsed"
+      breakpoint="lg"
+      collapsible
+      hide-trigger
+      @collapse="collapsed = $event"
+    >
+      <div class="brand" :class="{ compact: collapsed }">
+        <div class="brand-mark" aria-hidden="true">
+          <span class="brand-mark-bar"></span>
+          <span class="brand-mark-bar"></span>
+          <span class="brand-mark-bar"></span>
         </div>
-        <div class="logo-text">
-          <div class="title">Enterprise Exam</div>
-          <div class="subtitle">企业智能考务平台</div>
+        <div v-if="!collapsed" class="brand-copy">
+          <strong>Exam Control</strong>
+          <span>企业智能考务平台</span>
         </div>
       </div>
 
-      <nav class="nav-menu">
-        <!-- 考生端专属 -->
-        <div class="menu-group-title">学习与考试</div>
-        <router-link to="/student/exams" class="nav-item" active-class="active">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect width="18" height="18" x="3" y="3" rx="2" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
-          <span>我的考务中心</span>
-        </router-link>
+      <a-menu class="exam-menu" :selected-keys="[route.path]" :collapsed="collapsed" @menu-item-click="navigate">
+        <div v-if="!collapsed" class="menu-caption">学习与考试</div>
+        <a-menu-item key="/student/exams">
+          <template #icon><icon-check-square /></template>
+          我的考务中心
+        </a-menu-item>
 
-        <!-- 管理/考官端 -->
         <template v-if="userStore.isTeacher || userStore.isSuperAdmin">
-          <div class="menu-group-title">考务与数据中心</div>
-          
-          <router-link to="/admin/analytics" class="nav-item" active-class="active">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 3v18h18" />
-              <path d="m19 9-5 5-4-4-3 3" />
-            </svg>
-            <span>考务分析与数据大盘</span>
-          </router-link>
-
-          <router-link to="/admin/questions" class="nav-item" active-class="active">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2v20" />
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
-            <span>题库与试题管理</span>
-          </router-link>
-
-          <router-link to="/admin/papers" class="nav-item" active-class="active">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-              <polyline points="14 2 14 8 20 8" />
-            </svg>
-            <span>试卷设计与管理</span>
-          </router-link>
-
-          <router-link to="/admin/exams" class="nav-item" active-class="active">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
-              <line x1="16" x2="16" y1="2" y2="6" />
-              <line x1="8" x2="8" y1="2" y2="6" />
-              <line x1="3" x2="21" y1="10" y2="10" />
-            </svg>
-            <span>考务排期与发布</span>
-          </router-link>
-
-          <router-link to="/admin/grading" class="nav-item" active-class="active">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-            </svg>
-            <span>主观题阅卷工作台</span>
-          </router-link>
+          <div v-if="!collapsed" class="menu-caption">考务与数据中心</div>
+          <a-menu-item key="/admin/analytics">
+            <template #icon><icon-dashboard /></template>
+            数据概览
+          </a-menu-item>
+          <a-menu-item key="/admin/questions">
+            <template #icon><icon-bulb /></template>
+            题库管理
+          </a-menu-item>
+          <a-menu-item key="/admin/papers">
+            <template #icon><icon-file /></template>
+            试卷设计
+          </a-menu-item>
+          <a-menu-item key="/admin/exams">
+            <template #icon><icon-calendar /></template>
+            考试发布
+          </a-menu-item>
+          <a-menu-item key="/admin/grading">
+            <template #icon><icon-edit /></template>
+            阅卷工作台
+          </a-menu-item>
         </template>
 
-        <!-- 超管端 -->
         <template v-if="userStore.isSuperAdmin">
-          <div class="menu-group-title">系统与集成</div>
-          <router-link to="/admin/org" class="nav-item" active-class="active">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <span>组织架构管理</span>
-          </router-link>
+          <div v-if="!collapsed" class="menu-caption">系统与集成</div>
+          <a-menu-item key="/admin/org">
+            <template #icon><icon-user-group /></template>
+            组织架构
+          </a-menu-item>
         </template>
-      </nav>
+      </a-menu>
 
-      <div class="sidebar-footer">
-        <div class="sso-badge">
-          <span class="status-dot"></span>
-          <span>统一身份认证已连接</span>
+      <div class="sider-bottom" :class="{ compact: collapsed }">
+        <a-tooltip :content="collapsed ? `展开侧栏 · ${currentTitle}` : '收起侧栏'" position="right">
+          <a-button class="collapse-button" type="text" shape="circle" @click="collapsed = !collapsed">
+            <icon-menu-unfold v-if="collapsed" />
+            <icon-menu-fold v-else />
+          </a-button>
+        </a-tooltip>
+        <div v-if="!collapsed" class="sider-page-identity">
+          <span>{{ currentSection }}</span>
+          <strong>{{ currentTitle }}</strong>
         </div>
       </div>
-    </aside>
+    </a-layout-sider>
 
-    <!-- 主体区域 -->
-    <div class="main-wrapper">
-      <!-- 顶栏 -->
-      <header class="top-header glass-panel">
-        <div class="header-left">
-          <!-- 干净简洁的顶栏左侧 -->
-        </div>
-
-        <div class="header-right">
-          <el-dropdown
-            trigger="click"
-            placement="bottom-end"
-            popper-class="account-dropdown"
-            @command="handleAccountCommand"
+    <a-layout class="main-shell">
+      <a-layout-header class="topbar">
+        <div v-if="isAdminRoute" class="workflow-rail" aria-label="考务工作流">
+          <button
+            v-for="(item, index) in adminFlow"
+            :key="item.path"
+            type="button"
+            class="flow-node"
+            :class="{ active: route.path.startsWith(item.path), passed: index < currentFlowIndex }"
+            @click="navigate(item.path)"
           >
-            <button class="account-trigger" type="button" aria-label="打开账户菜单">
-              <div class="avatar-circle" aria-hidden="true">
-                {{ userStore.fullName ? userStore.fullName.charAt(0) : 'U' }}
-                <span class="avatar-status"></span>
-              </div>
-              <div class="user-meta">
-                <span class="user-name">{{ userStore.fullName }}</span>
-                <div class="identity-line">
-                  <span class="role-label">{{ getRoleName(userStore.role) }}</span>
-                  <span class="identity-divider" aria-hidden="true"></span>
-                  <span class="dept-text">{{ userStore.deptName || '企业成员' }}</span>
-                </div>
-              </div>
-              <ChevronDown :size="15" class="account-chevron" aria-hidden="true" />
-            </button>
-
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="logout">
-                  <LogOut :size="15" />
-                  <span>退出登录</span>
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+            <span>{{ index + 1 }}</span>
+            <em>{{ item.label }}</em>
+          </button>
         </div>
-      </header>
 
-      <!-- 内容区 -->
-      <main class="content-body">
-        <router-view />
-      </main>
-    </div>
-  </div>
+        <a-dropdown trigger="click" position="br" @select="handleAccountCommand">
+          <button class="account-trigger" type="button" aria-label="打开账户菜单">
+            <a-avatar :size="36" class="user-avatar">{{ userInitial }}</a-avatar>
+            <span class="user-copy">
+              <strong>{{ userStore.fullName || '企业成员' }}</strong>
+              <small>{{ roleName }} · {{ userStore.deptName || '企业成员' }}</small>
+            </span>
+            <icon-down class="account-chevron" />
+          </button>
+          <template #content>
+            <a-doption value="logout">
+              <template #icon><icon-export /></template>
+              退出登录
+            </a-doption>
+          </template>
+        </a-dropdown>
+      </a-layout-header>
+
+      <a-layout-content class="content-body">
+        <router-view v-slot="{ Component }">
+          <transition name="page-fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </a-layout-content>
+    </a-layout>
+  </a-layout>
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Message } from '@arco-design/web-vue'
 import { useUserStore } from '@/stores/user'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { ChevronDown, LogOut } from 'lucide-vue-next'
 
-const userStore = useUserStore()
+const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
+const collapsed = ref(false)
 
-const handleLogout = () => {
-  userStore.logout()
-  router.push('/login')
-  ElMessage.info('已退出登录')
+const adminFlow = [
+  { label: '题库', path: '/admin/questions' },
+  { label: '组卷', path: '/admin/papers' },
+  { label: '发布', path: '/admin/exams' },
+  { label: '阅卷', path: '/admin/grading' },
+  { label: '分析', path: '/admin/analytics' },
+]
+
+const pageMap = {
+  '/student/exams': ['学习与考试', '我的考务中心'],
+  '/admin/analytics': ['考务数据', '数据概览'],
+  '/admin/questions': ['内容资产', '题库管理'],
+  '/admin/papers': ['内容资产', '试卷设计'],
+  '/admin/exams': ['考试运营', '考试发布'],
+  '/admin/grading': ['考试运营', '阅卷工作台'],
+  '/admin/org': ['系统设置', '组织架构'],
+}
+
+const matchedPage = computed(() => {
+  const key = Object.keys(pageMap).find((path) => route.path.startsWith(path))
+  return pageMap[key] || ['工作台', '企业考务']
+})
+const currentSection = computed(() => matchedPage.value[0])
+const currentTitle = computed(() => matchedPage.value[1])
+const isAdminRoute = computed(() => route.path.startsWith('/admin/') && route.path !== '/admin/org')
+const currentFlowIndex = computed(() => adminFlow.findIndex((item) => route.path.startsWith(item.path)))
+const userInitial = computed(() => (userStore.fullName || 'U').trim().charAt(0).toUpperCase())
+const roleName = computed(() => {
+  if (userStore.role === 'super_admin') return '超级管理员'
+  if (userStore.role === 'teacher') return '出题 / 阅卷人'
+  return '考生 / 员工'
+})
+
+const navigate = (path) => {
+  if (path && path !== route.path) router.push(path)
 }
 
 const handleAccountCommand = (command) => {
-  if (command === 'logout') handleLogout()
+  if (command !== 'logout') return
+  userStore.logout()
+  router.push('/login')
+  Message.info('已退出登录')
 }
-
-const getRoleName = (role) => {
-  if (role === 'super_admin') return '超级管理员'
-  if (role === 'teacher') return '出题/阅卷人'
-  return '考生/员工'
-}
-
 </script>
 
 <style scoped>
-.layout-container {
-  display: flex;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-  background-color: #f8fafc;
+.exam-layout { width: 100vw; height: 100vh; overflow: hidden; background: var(--color-bg-1); }
+.exam-sider { position: relative; z-index: 30; height: 100vh; background: #fff; border-right: 1px solid var(--border-color); box-shadow: none; }
+:deep(.arco-layout-sider-children) { display: flex; flex-direction: column; }
+.brand { height: 64px; flex: 0 0 64px; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid #f2f3f5; overflow: hidden; }
+.brand.compact { justify-content: center; padding: 0; }
+.brand-mark { width: 34px; height: 34px; flex: 0 0 34px; padding: 8px 7px; display: flex; align-items: flex-end; gap: 3px; border-radius: var(--app-radius-control); color: #fff; background: #165dff; }
+.brand-mark-bar { width: 5px; border-radius: 2px 2px 1px 1px; background: currentColor; }
+.brand-mark-bar:nth-child(1) { height: 9px; opacity: .68; }
+.brand-mark-bar:nth-child(2) { height: 17px; }
+.brand-mark-bar:nth-child(3) { height: 13px; opacity: .82; }
+.brand-copy { display: flex; min-width: 0; flex-direction: column; gap: 2px; white-space: nowrap; }
+.brand-copy strong { color: #1d2129; font-size: 15px; letter-spacing: -.2px; }
+.brand-copy span { color: #86909c; font-size: 11px; }
+.exam-menu { flex: 1; overflow-y: auto; padding: 10px 8px; border-right: 0; }
+:deep(.arco-menu-inner) { padding: 0; }
+:deep(.arco-menu-item) { height: 40px; margin-bottom: 2px; border-radius: 4px; color: #4e5969; font-weight: 500; }
+:deep(.arco-menu-item.arco-menu-selected) { color: #165dff; background: #e8f3ff; }
+:deep(.arco-menu-icon) { font-size: 17px; }
+.menu-caption { height: 34px; display: flex; align-items: flex-end; padding: 0 12px 8px; color: #86909c; font-size: 11px; font-weight: 600; letter-spacing: .08em; white-space: nowrap; }
+.sider-bottom { min-height: 62px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #f2f3f5; background: #fff; }
+.sider-bottom.compact { padding-inline: 0; justify-content: center; }
+.sider-page-identity { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sider-page-identity span { color: #86909c; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.sider-page-identity strong { overflow: hidden; color: #1d2129; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.main-shell { min-width: 0; height: 100vh; overflow: hidden; }
+.topbar { position: relative; height: 64px; flex: 0 0 64px; padding: 0 24px; display: flex; align-items: center; gap: 24px; color: var(--color-text-1); background: var(--color-bg-2); border-bottom: 1px solid var(--color-border-2); }
+.collapse-button { color: #4e5969; }
+.workflow-rail { position: absolute; left: 50%; display: flex; align-items: center; transform: translateX(-50%); }
+.flow-node { position: relative; appearance: none; padding: 0 18px 0 0; display: flex; align-items: center; gap: 6px; color: #86909c; background: transparent; border: 0; font: inherit; cursor: pointer; }
+.flow-node:not(:last-child)::after { content: ''; width: 16px; height: 1px; margin-left: 6px; background: #c9cdd4; }
+.flow-node span { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid #c9cdd4; border-radius: 50%; font-size: 10px; font-style: normal; }
+.flow-node em { font-size: 11px; font-style: normal; white-space: nowrap; }
+.flow-node:hover, .flow-node.active { color: #165dff; }
+.flow-node.active span { color: #fff; border-color: #165dff; background: #165dff; box-shadow: 0 0 0 3px #e8f3ff; }
+.flow-node.passed span { color: #165dff; border-color: #94bfff; background: #e8f3ff; }
+.account-trigger { flex: 0 0 auto; margin-left: auto; appearance: none; min-width: 0; padding: 5px 7px; display: flex; align-items: center; gap: 10px; color: inherit; background: transparent; border: 1px solid transparent; border-radius: var(--app-radius-control); font: inherit; text-align: left; cursor: pointer; transition: .16s ease; }
+.account-trigger:hover { background: #f7f8fa; border-color: #e5e6eb; }
+.user-avatar { flex: 0 0 auto; color: #165dff; font-weight: 700; background: #e8f3ff; }
+.user-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.user-copy strong, .user-copy small { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-copy strong { color: #1d2129; font-size: 13px; }
+.user-copy small { color: #86909c; font-size: 10px; }
+.account-chevron { color: #86909c; font-size: 12px; }
+.content-body { min-width: 0; padding: 24px; overflow: auto; background: var(--color-bg-1); }
+.page-fade-enter-active, .page-fade-leave-active { transition: opacity .14s ease, transform .14s ease; }
+.page-fade-enter-from { opacity: 0; transform: translateY(4px); }
+.page-fade-leave-to { opacity: 0; }
+@media (max-width: 1180px) {
+  .workflow-rail { display: none; }
 }
-
-.sidebar {
-  width: 260px;
-  height: 100vh;
-  background: #ffffff;
-  border-right: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-.sidebar-header {
-  height: 64px;
-  padding: 0 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid #f1f5f9;
-  flex-shrink: 0;
-}
-
-.logo-box {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-.logo-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.logo-text .title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.3px;
-}
-.logo-text .subtitle {
-  font-size: 11px;
-  color: #64748b;
-}
-
-.nav-menu {
-  flex: 1;
-  padding: 16px 12px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.menu-group-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-  padding: 12px 12px 6px 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  color: #475569;
-  text-decoration: none;
-  font-size: 13.5px;
-  font-weight: 500;
-  transition: all 0.15s ease;
-}
-
-.nav-icon {
-  width: 18px;
-  height: 18px;
-  color: #64748b;
-  transition: color 0.15s ease;
-}
-
-.nav-item:hover {
-  background: #f1f5f9;
-  color: #1e293b;
-}
-.nav-item:hover .nav-icon {
-  color: #3b82f6;
-}
-
-.nav-item.active {
-  background: #eff6ff;
-  color: #2563eb;
-  font-weight: 600;
-}
-.nav-item.active .nav-icon {
-  color: #2563eb;
-}
-
-.sidebar-footer {
-  padding: 16px;
-  border-top: 1px solid #f1f5f9;
-  flex-shrink: 0;
-}
-.sso-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #059669;
-  background: #ecfdf5;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-weight: 500;
-}
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 0 2px #a7f3d0;
-}
-
-.main-wrapper {
-  flex: 1;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.top-header {
-  height: 64px;
-  padding: 0 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid #e2e8f0;
-  background: #ffffff;
-  flex-shrink: 0;
-  z-index: 20;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-}
-
-.account-trigger {
-  appearance: none;
-  min-width: 0;
-  padding: 6px 8px 6px 7px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
-}
-
-.account-trigger:hover,
-.account-trigger:focus-visible {
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-.account-trigger:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
-}
-
-.avatar-circle {
-  position: relative;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
-  box-shadow: 0 3px 10px rgba(59, 130, 246, 0.24);
-}
-
-.avatar-status {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 9px;
-  height: 9px;
-  border: 2px solid #ffffff;
-  border-radius: 50%;
-  background: #22c55e;
-}
-
-.user-meta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.user-meta .user-name {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13.5px;
-  line-height: 1.2;
-  font-weight: 650;
-  color: #0f172a;
-}
-
-.identity-line {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  line-height: 1.2;
-  color: #64748b;
-}
-
-.role-label {
-  color: #2563eb;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.identity-divider {
-  width: 3px;
-  height: 3px;
-  flex: 0 0 3px;
-  border-radius: 50%;
-  background: #cbd5e1;
-}
-
-.user-meta .dept-text {
-  max-width: 110px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.account-chevron {
-  flex: 0 0 auto;
-  color: #94a3b8;
-  transition: transform 0.16s ease, color 0.16s ease;
-}
-
-.account-trigger:hover .account-chevron {
-  color: #475569;
-}
-
 @media (max-width: 720px) {
-  .top-header {
-    padding: 0 14px;
-  }
-
-  .user-meta,
-  .account-chevron {
-    display: none;
-  }
-
-  .account-trigger {
-    padding: 5px;
-  }
-}
-
-.content-body {
-  flex: 1;
-  padding: 24px 28px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  .topbar { padding: 0 12px; gap: 8px; }
+  .user-copy, .account-chevron { display: none; }
+  .content-body { padding: 14px; }
 }
 </style>

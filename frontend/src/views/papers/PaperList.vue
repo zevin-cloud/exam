@@ -1,36 +1,31 @@
 <template>
-  <div class="paper-list-container">
-    <div class="page-header">
-      <div class="header-title-wrap flex items-center gap-3">
-        <div class="header-icon-box w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center border border-blue-100">
+  <AppPage class="paper-list-container">
+    <AppPageHeader
+      eyebrow="内容资产"
+      title="试卷管理与组卷中心"
+      description="支持可视化设计与题库快速组卷，统一配置题型和分值规则"
+    >
+      <template #icon>
           <FileText :size="20" class="text-blue-600" />
-        </div>
-        <div>
-          <h2 class="text-xl font-bold text-slate-800">试卷管理与组卷中心</h2>
-          <p class="text-xs text-slate-500 mt-1">支持可视化拖拽设计与题库一键组卷，灵活配置题型与分值规则</p>
-        </div>
-      </div>
-
-      <div class="flex gap-3">
-        <el-button type="success" plain @click="openQuickGenerateDialog">
+      </template>
+      <template #actions>
+        <a-button type="outline" status="success" @click="openQuickGenerateDialog">
           <Sparkles :size="14" class="mr-1" /> 从题库快速选题组卷
-        </el-button>
-        <el-button type="primary" @click="createEmptyPaper">
-          <Plus :size="14" class="mr-1" /> 可视化创建试卷
-        </el-button>
-      </div>
-    </div>
+        </a-button>
+        <a-button type="primary" @click="createEmptyPaper">
+          <template #icon><icon-plus /></template>可视化创建试卷
+        </a-button>
+      </template>
+    </AppPageHeader>
 
     <!-- 试卷卡片列表 -->
-    <div v-if="loading" class="text-center py-20">
-      <el-icon class="is-loading" :size="32" color="#3b82f6"><Loading /></el-icon>
-      <p class="text-slate-400 mt-2 text-sm">正在加载试卷库...</p>
-    </div>
+    <AppState v-if="loading" loading loading-text="正在加载试卷库..." />
 
-    <div v-else-if="paperList.length === 0" class="empty-box app-card text-center py-16 mt-4">
-      <ClipboardList :size="48" class="text-slate-300 mx-auto mb-2" />
-      <p class="text-slate-500 font-medium">暂无试卷，快来创建第一份考核试卷吧！</p>
-    </div>
+    <AppState
+      v-else-if="paperList.length === 0"
+      title="暂无试卷"
+      description="创建第一份考核试卷后，可在此统一管理和发布"
+    />
 
     <div v-else class="paper-grid mt-6">
       <div v-for="paper in paperList" :key="paper.id" class="paper-card app-card">
@@ -62,70 +57,70 @@
         </div>
 
         <div class="paper-actions">
-          <el-button type="primary" plain class="flex-1" @click="editPaper(paper.id)">
-            <PenTool :size="13" class="mr-1" /> 编辑设计试卷
-          </el-button>
-          <el-button type="danger" link @click="deletePaper(paper.id)">
+          <a-button type="outline" class="flex-1" @click="editPaper(paper.id)">
+            <template #icon><icon-edit /></template>编辑设计试卷
+          </a-button>
+          <a-button type="text" status="danger" @click="deletePaper(paper.id)">
             删除
-          </el-button>
+          </a-button>
         </div>
       </div>
     </div>
 
     <!-- 从题库选题一键组卷弹窗 -->
-    <el-dialog v-model="quickGenVisible" title="从题库快速选题组卷" width="760px">
+    <a-modal v-model:visible="quickGenVisible" title="从题库快速选题组卷" width="840px">
       <div class="p-2">
-        <el-form :model="quickForm" label-width="90px">
-          <el-form-item label="试卷标题" required>
-            <el-input v-model="quickForm.title" placeholder="例如：2026年企业新员工入职考试试卷" />
-          </el-form-item>
+        <a-form :model="quickForm" :label-col-props="{ span: 4 }" :wrapper-col-props="{ span: 20 }">
+          <a-form-item label="试卷标题" required>
+            <a-input v-model="quickForm.title" placeholder="例如：2026年企业新员工入职考试试卷" />
+          </a-form-item>
           <div class="grid grid-cols-2 gap-4">
-            <el-form-item label="建议用时">
-              <el-input-number v-model="quickForm.suggest_duration" :min="5" :max="180" /> 分钟
-            </el-form-item>
-            <el-form-item label="及格分数线">
-              <el-input-number v-model="quickForm.pass_score" :min="1" :max="1000" /> 分
-            </el-form-item>
+            <a-form-item label="建议用时">
+              <a-input-number v-model="quickForm.suggest_duration" :min="5" :max="180" /> 分钟
+            </a-form-item>
+            <a-form-item label="及格分数线">
+              <a-input-number v-model="quickForm.pass_score" :min="1" :max="1000" /> 分
+            </a-form-item>
           </div>
-        </el-form>
+        </a-form>
 
         <div class="text-xs text-slate-500 font-semibold mb-2 mt-4">勾选要加入试卷的题目：</div>
-        <el-table 
-          :data="allQuestions" 
-          v-loading="questionsLoading" 
-          max-height="300"
-          @selection-change="handleSelectionChange"
+        <a-table
+          v-model:selected-keys="selectedQuestionIds"
+          :columns="questionColumns"
+          :data="allQuestions"
+          :loading="questionsLoading"
+          :pagination="false"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true }"
+          :scroll="{ y: 300 }"
+          row-key="id"
           stripe
         >
-          <el-table-column type="selection" width="45" align="center" />
-          <el-table-column prop="id" label="ID" width="60" align="center" />
-          <el-table-column prop="type" label="题型" width="90">
-            <template #default="{ row }">{{ getTypeName(row.type) }}</template>
-          </el-table-column>
-          <el-table-column prop="title" label="题干" show-overflow-tooltip />
-          <el-table-column prop="score" label="分值" width="70" align="center">
-            <template #default="{ row }">{{ row.score }}分</template>
-          </el-table-column>
-        </el-table>
+          <template #type="{ record }">{{ getTypeName(record.type) }}</template>
+          <template #score="{ record }">{{ record.score }}分</template>
+        </a-table>
         <div class="text-right text-xs text-slate-500 mt-2">
           已勾选 <strong>{{ selectedQuestionIds.length }}</strong> 道题目，预估总分：<strong>{{ selectedTotalScore }}</strong> 分
         </div>
       </div>
 
       <template #footer>
-        <el-button @click="quickGenVisible = false">取消</el-button>
-        <el-button type="primary" :loading="generating" @click="submitQuickGenerate">一键生成试卷</el-button>
+        <a-button @click="quickGenVisible = false">取消</a-button>
+        <a-button type="primary" :loading="generating" @click="submitQuickGenerate">一键生成试卷</a-button>
       </template>
-    </el-dialog>
-  </div>
+    </a-modal>
+  </AppPage>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { paperApi, questionApi } from '@/api'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { FileText, Sparkles, Plus, ClipboardList, PenTool } from 'lucide-vue-next'
+import { Message, Modal } from '@arco-design/web-vue'
+import { FileText, Sparkles } from 'lucide-vue-next'
+import AppPage from '@/components/ui/AppPage.vue'
+import AppPageHeader from '@/components/ui/AppPageHeader.vue'
+import AppState from '@/components/ui/AppState.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -137,6 +132,12 @@ const questionsLoading = ref(false)
 const generating = ref(false)
 const allQuestions = ref([])
 const selectedQuestionIds = ref([])
+const questionColumns = [
+  { title: 'ID', dataIndex: 'id', width: 60, align: 'center' },
+  { title: '题型', dataIndex: 'type', width: 90, slotName: 'type' },
+  { title: '题干', dataIndex: 'title', ellipsis: true, tooltip: true },
+  { title: '分值', dataIndex: 'score', width: 70, align: 'center', slotName: 'score' },
+]
 
 const quickForm = ref({
   title: '',
@@ -175,12 +176,17 @@ const editPaper = (id) => {
 }
 
 const deletePaper = (id) => {
-  ElMessageBox.confirm('确定要删除该试卷吗？若已有发布的考务关联将受影响。', '删除确认', {
-    type: 'warning'
-  }).then(async () => {
-    await paperApi.deletePaper(id)
-    ElMessage.success('试卷已删除')
-    fetchPapers()
+  Modal.warning({
+    title: '删除确认',
+    content: '确定要删除该试卷吗？若已有发布的考务关联将受影响。',
+    hideCancel: false,
+    okText: '删除试卷',
+    cancelText: '取消',
+    onOk: async () => {
+      await paperApi.deletePaper(id)
+      Message.success('试卷已删除')
+      fetchPapers()
+    },
   })
 }
 
@@ -196,10 +202,6 @@ const openQuickGenerateDialog = async () => {
   }
 }
 
-const handleSelectionChange = (selection) => {
-  selectedQuestionIds.value = selection.map(item => item.id)
-}
-
 const selectedTotalScore = computed(() => {
   const map = new Set(selectedQuestionIds.value)
   return allQuestions.value
@@ -209,11 +211,11 @@ const selectedTotalScore = computed(() => {
 
 const submitQuickGenerate = async () => {
   if (!quickForm.value.title) {
-    ElMessage.warning('请输入试卷标题')
+    Message.warning('请输入试卷标题')
     return
   }
   if (selectedQuestionIds.value.length === 0) {
-    ElMessage.warning('请至少勾选一道题目')
+    Message.warning('请至少勾选一道题目')
     return
   }
 
@@ -227,7 +229,7 @@ const submitQuickGenerate = async () => {
       pass_score: quickForm.value.pass_score,
       question_ids: selectedQuestionIds.value
     })
-    ElMessage.success('试卷生成成功！')
+    Message.success('试卷生成成功！')
     quickGenVisible.value = false
     fetchPapers()
     router.push(`/admin/papers/editor/${res.id}`)
@@ -256,26 +258,19 @@ onMounted(() => {
 
 <style scoped>
 .paper-list-container {
-  max-width: 1280px;
-  margin: 0 auto;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  --app-page-gap: var(--app-space-4);
 }
 
 .paper-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 20px;
+  gap: var(--app-space-4);
 }
 
 .paper-card {
   background: white;
-  padding: 22px;
-  border-radius: 14px;
+  padding: var(--app-space-5);
+  border-radius: var(--app-radius-panel);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -284,14 +279,14 @@ onMounted(() => {
 .paper-title {
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--color-text-1);
   line-height: 1.4;
 }
 
 .category-tag {
   font-size: 11px;
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--color-text-3);
   padding: 2px 8px;
   border-radius: 4px;
   font-weight: 500;
@@ -309,8 +304,8 @@ onMounted(() => {
 }
 
 .paper-metrics {
-  background: #f8fafc;
-  border-radius: 10px;
+  background: var(--color-fill-1);
+  border-radius: var(--app-radius-control);
   padding: 12px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -323,7 +318,7 @@ onMounted(() => {
   font-size: 12px;
 }
 .metric .label {
-  color: #64748b;
+  color: var(--color-text-3);
 }
 
 .paper-actions {

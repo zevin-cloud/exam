@@ -1,12 +1,11 @@
 <template>
-  <el-config-provider :locale="zhCn">
+  <a-config-provider :locale="zhCn" size="medium">
     <router-view />
-  </el-config-provider>
+  </a-config-provider>
 </template>
 
 <script setup>
-import { ElConfigProvider } from 'element-plus'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import zhCn from '@arco-design/web-vue/es/locale/lang/zh-cn'
 </script>
 
 <style>

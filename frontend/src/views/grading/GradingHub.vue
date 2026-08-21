@@ -1,154 +1,128 @@
 <template>
-  <div class="grading-page">
-    <!-- 一体化专业卡片 (参照题库与试题管理设计) -->
-    <div class="grading-card app-card">
-      <!-- 顶部工具栏 -->
-      <div class="card-toolbar">
-        <div class="toolbar-left">
-          <h3 class="card-title">主观题阅卷列表</h3>
-          <span class="count-badge">共 {{ items.length }} 份答卷 / 待批阅 {{ pendingCount }} 份</span>
-        </div>
-
-        <div class="toolbar-right">
+  <AppPage class="grading-page">
+    <AppPageHeader
+      eyebrow="考试运营"
+      title="阅卷工作台"
+      description="集中处理主观题评分、复核与整卷查看"
+    />
+    <AppPanel title="主观题阅卷列表" :description="`共 ${items.length} 份答卷 / 待批阅 ${pendingCount} 份`" flush>
+      <AppToolbar>
+        <div class="toolbar-filters">
           <!-- 考试任务筛选 -->
-          <el-select 
-            v-model="filterExamId" 
-            placeholder="全部考试任务" 
-            clearable 
-            class="exam-select"
-            @change="fetchItems"
-          >
-            <el-option 
-              v-for="task in examTasks" 
-              :key="task.id" 
-              :label="task.title" 
-              :value="task.id" 
-            />
-          </el-select>
+          <div class="exam-select">
+            <a-select
+              v-model="filterExamId"
+              placeholder="全部考试任务"
+              allow-clear
+              @change="fetchItems"
+            >
+              <a-option
+                v-for="task in examTasks"
+                :key="task.id"
+                :label="task.title"
+                :value="task.id"
+              />
+            </a-select>
+          </div>
 
           <!-- 批阅状态筛选 -->
-          <el-select 
-            v-model="filterStatus" 
-            placeholder="批阅状态" 
-            class="status-select"
-            @change="fetchItems"
-          >
-            <el-option label="全部答卷" value="all" />
-            <el-option label="待批阅" value="pending" />
-            <el-option label="已出分" value="graded" />
-          </el-select>
+          <div class="status-select">
+            <a-select
+              v-model="filterStatus"
+              placeholder="批阅状态"
+              @change="fetchItems"
+            >
+              <a-option label="全部答卷" value="all" />
+              <a-option label="待批阅" value="pending" />
+              <a-option label="已出分" value="graded" />
+            </a-select>
+          </div>
 
           <!-- 搜索框 -->
-          <el-input 
+          <a-input
             v-model="searchKeyword" 
             placeholder="搜索学员姓名或题干" 
-            clearable 
+            allow-clear
             class="search-input"
             @keyup.enter="fetchItems"
             @clear="fetchItems"
           >
-            <template #prefix>
-              <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-            </template>
-          </el-input>
+            <template #prefix><icon-search /></template>
+          </a-input>
 
-          <!-- 操作按钮组 -->
+        </div>
+        <template #actions>
           <div class="action-btn-group">
-            <el-button @click="fetchItems">
-              刷新数据
-            </el-button>
-            <el-button 
+            <a-button @click="fetchItems">
+              <template #icon><icon-refresh /></template>刷新数据
+            </a-button>
+            <a-button
               type="primary" 
               class="pipeline-btn" 
               :disabled="pendingCount === 0"
               @click="openPipelineMode"
             >
               流水盲阅模式 ({{ pendingCount }})
-            </el-button>
+            </a-button>
           </div>
-        </div>
-      </div>
+        </template>
+      </AppToolbar>
 
       <!-- 主观题数据表格 -->
       <div class="table-wrapper">
-        <el-table 
-          :data="items" 
-          v-loading="loading" 
-          style="width: 100%"
+        <a-table
+          :columns="gradingColumns"
+          :data="items"
+          :loading="loading"
+          :pagination="false"
+          row-key="detail_id"
           class="custom-data-table"
         >
-          <el-table-column prop="detail_id" label="ID" width="70" align="center" />
-          
-          <el-table-column label="考生姓名" min-width="160">
-            <template #default="{ row }">
+          <template #candidate="{ record }">
               <div class="candidate-row">
-                <span class="candidate-name">{{ row.student_name }}</span>
-                <span class="candidate-dept">{{ row.department_name }}</span>
+                <span class="candidate-name">{{ record.student_name }}</span>
+                <span class="candidate-dept">{{ record.department_name }}</span>
               </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column prop="exam_title" label="所属考试" min-width="200" show-overflow-tooltip />
-
-          <el-table-column prop="question_title" label="主观题干" min-width="260" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span class="question-text">{{ row.question_title }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="考生作答摘要" min-width="240" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span class="answer-preview">{{ answerSummary(row.user_answer) }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="得分 / 满分" width="120" align="center">
-            <template #default="{ row }">
-              <span v-if="row.is_graded" class="score-graded">
-                {{ row.actual_score }} / {{ row.max_score }}分
+          </template>
+          <template #question="{ record }"><span class="question-text">{{ record.question_title }}</span></template>
+          <template #answer="{ record }"><span class="answer-preview">{{ answerSummary(record.user_answer) }}</span></template>
+          <template #score="{ record }">
+              <span v-if="record.is_graded" class="score-graded">
+                {{ record.actual_score }} / {{ record.max_score }}分
               </span>
               <span v-else class="score-pending">
-                待评 / {{ row.max_score }}分
+                待评 / {{ record.max_score }}分
               </span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="状态" width="100" align="center">
-            <template #default="{ row }">
-              <span class="status-pill" :class="row.is_graded ? 'pill-graded' : 'pill-pending'">
-                {{ row.is_graded ? '已评阅' : '待批阅' }}
+          </template>
+          <template #status="{ record }">
+              <span class="status-pill" :class="record.is_graded ? 'pill-graded' : 'pill-pending'">
+                {{ record.is_graded ? '已评阅' : '待批阅' }}
               </span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="操作" width="180" align="center" fixed="right">
-            <template #default="{ row }">
+          </template>
+          <template #operations="{ record }">
               <div class="table-ops">
-                <el-button link type="primary" size="small" @click="openGradingDrawer(row)">
-                  {{ row.is_graded ? '复核打分' : '即时评分' }}
-                </el-button>
-                <el-button link type="info" size="small" @click="viewFullPaper(row)">查看整卷</el-button>
+                <a-button type="text" size="mini" @click="openGradingDrawer(record)">
+                  {{ record.is_graded ? '复核打分' : '即时评分' }}
+                </a-button>
+                <a-button type="text" size="mini" @click="viewFullPaper(record)">查看整卷</a-button>
               </div>
-            </template>
-          </el-table-column>
-        </el-table>
+          </template>
+        </a-table>
       </div>
 
       <!-- 底部统计 -->
-      <div class="card-footer">
+      <template #footer>
         <span class="footer-total">共 {{ items.length }} 条主观题作答记录</span>
-      </div>
-    </div>
+      </template>
+    </AppPanel>
 
     <!-- 指定查看与打分抽屉 -->
-    <el-drawer 
-      v-model="drawerVisible" 
+    <a-drawer
+      v-model:visible="drawerVisible"
       :title="activeDetail?.is_graded ? '复核主观题评分' : '主观题即时打分'" 
-      size="560px"
-      destroy-on-close
+      width="640px"
+      unmount-on-close
+      :footer="false"
     >
       <div v-if="activeDetail" class="drawer-content flex flex-col justify-between h-full">
         <div>
@@ -192,10 +166,10 @@
 
           <!-- 打分与评语表单 -->
           <div class="p-4 bg-white rounded-lg border border-slate-200">
-            <el-form label-position="top">
-              <el-form-item label="给予得分" required>
+            <a-form layout="vertical">
+              <a-form-item label="给予得分" required>
                 <div class="flex items-center gap-3">
-                  <el-input-number 
+                  <a-input-number
                     v-model="drawerForm.score" 
                     :min="0" 
                     :max="activeDetail.max_score" 
@@ -203,31 +177,30 @@
                   />
                   <span class="text-slate-400 text-xs">/ 满分 {{ activeDetail.max_score }} 分</span>
                 </div>
-              </el-form-item>
+              </a-form-item>
 
-              <el-form-item label="考官阅卷评语">
-                <el-input 
+              <a-form-item label="考官阅卷评语">
+                <a-textarea
                   v-model="drawerForm.comment" 
-                  type="textarea" 
                   :rows="3" 
                   placeholder="写明回答亮点或扣分理由..." 
                 />
-              </el-form-item>
-            </el-form>
+              </a-form-item>
+            </a-form>
           </div>
         </div>
 
         <div class="pt-4 border-t border-slate-100 flex justify-end gap-3 mt-4">
-          <el-button @click="drawerVisible = false">取消</el-button>
-          <el-button type="primary" :loading="drawerSaving" @click="saveDrawerGrade">
+          <a-button @click="drawerVisible = false">取消</a-button>
+          <a-button type="primary" :loading="drawerSaving" @click="saveDrawerGrade">
             确认保存得分
-          </el-button>
+          </a-button>
         </div>
       </div>
-    </el-drawer>
+    </a-drawer>
 
     <!-- 流水盲阅弹窗模式 -->
-    <el-dialog v-model="pipelineDialogVisible" title="沉浸式流水流水线阅卷" width="780px" destroy-on-close>
+    <a-modal v-model:visible="pipelineDialogVisible" title="沉浸式流水线阅卷" width="840px" unmount-on-close>
       <div v-if="currentPipelineItem" class="pipeline-wrap">
         <div class="flex justify-between items-center mb-3 text-xs text-slate-500">
           <span>所属考试: <strong>{{ currentPipelineItem.exam_title }}</strong></span>
@@ -256,32 +229,36 @@
         <div class="p-3 bg-slate-50 rounded border border-slate-200">
           <div class="flex items-center gap-3 mb-2">
             <span class="text-xs font-bold text-slate-700">给予得分:</span>
-            <el-input-number v-model="pipelineScore" :min="0" :max="currentPipelineItem.max_score" size="small" />
+            <a-input-number v-model="pipelineScore" :min="0" :max="currentPipelineItem.max_score" size="small" />
             <span class="text-xs text-slate-400">/ {{ currentPipelineItem.max_score }} 分</span>
           </div>
-          <el-input v-model="pipelineComment" type="textarea" :rows="2" placeholder="评语说明 (选填)..." />
+          <a-textarea v-model="pipelineComment" :rows="2" placeholder="评语说明 (选填)..." />
         </div>
       </div>
 
       <template #footer>
         <div class="flex justify-between items-center w-full">
-          <el-button :disabled="currentPipelineIndex === 0" @click="prevPipelineItem">上一题</el-button>
+          <a-button :disabled="currentPipelineIndex === 0" @click="prevPipelineItem">上一题</a-button>
           <div class="flex gap-2">
-            <el-button @click="pipelineDialogVisible = false">退出流水线</el-button>
-            <el-button type="primary" :loading="pipelineSaving" @click="submitPipelineGrade">保存并批阅下一题</el-button>
+            <a-button @click="pipelineDialogVisible = false">退出流水线</a-button>
+            <a-button type="primary" :loading="pipelineSaving" @click="submitPipelineGrade">保存并批阅下一题</a-button>
           </div>
         </div>
       </template>
-    </el-dialog>
-  </div>
+    </a-modal>
+  </AppPage>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { gradingApi, examApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import MarkdownAnswer from '@/components/exam/MarkdownAnswer.vue'
+import AppPage from '@/components/ui/AppPage.vue'
+import AppPageHeader from '@/components/ui/AppPageHeader.vue'
+import AppPanel from '@/components/ui/AppPanel.vue'
+import AppToolbar from '@/components/ui/AppToolbar.vue'
 
 const router = useRouter()
 
@@ -291,6 +268,16 @@ const examTasks = ref([])
 const filterExamId = ref(null)
 const filterStatus = ref('all')
 const searchKeyword = ref('')
+const gradingColumns = [
+  { title: 'ID', dataIndex: 'detail_id', width: 70, align: 'center' },
+  { title: '考生姓名', minWidth: 160, slotName: 'candidate' },
+  { title: '所属考试', dataIndex: 'exam_title', minWidth: 200, ellipsis: true, tooltip: true },
+  { title: '主观题干', dataIndex: 'question_title', minWidth: 260, ellipsis: true, tooltip: true, slotName: 'question' },
+  { title: '考生作答摘要', minWidth: 240, ellipsis: true, tooltip: true, slotName: 'answer' },
+  { title: '得分 / 满分', width: 120, align: 'center', slotName: 'score' },
+  { title: '状态', width: 100, align: 'center', slotName: 'status' },
+  { title: '操作', width: 180, align: 'center', fixed: 'right', slotName: 'operations' },
+]
 
 // 抽屉指定查看
 const drawerVisible = ref(false)
@@ -373,7 +360,7 @@ const saveDrawerGrade = async () => {
       score: drawerForm.value.score,
       comment: drawerForm.value.comment
     })
-    ElMessage.success('主观题评分成功！')
+    Message.success('主观题评分成功！')
     drawerVisible.value = false
     fetchItems()
   } finally {
@@ -384,7 +371,7 @@ const saveDrawerGrade = async () => {
 // 流水盲阅
 const openPipelineMode = () => {
   if (pendingItemsList.value.length === 0) {
-    ElMessage.info('暂无待批阅的主观题')
+    Message.info('暂无待批阅的主观题')
     return
   }
   currentPipelineIndex.value = 0
@@ -415,11 +402,11 @@ const submitPipelineGrade = async () => {
       score: pipelineScore.value,
       comment: pipelineComment.value
     })
-    ElMessage.success('评分已保存！')
+    Message.success('评分已保存！')
     await fetchItems()
     if (currentPipelineIndex.value >= pendingItemsList.value.length) {
       pipelineDialogVisible.value = false
-      ElMessage.success('恭喜！所有待批阅主观题均已批阅完成！')
+      Message.success('恭喜！所有待批阅主观题均已批阅完成！')
     } else {
       syncPipelineForm()
     }
@@ -436,68 +423,44 @@ onMounted(() => {
 
 <style scoped>
 .grading-page {
-  max-width: 1360px;
-  margin: 0 auto;
+  --app-page-gap: var(--app-space-4);
 }
 
-/* 主体卡片 (与题库管理完全一致) */
-.grading-card {
-  background: white;
-  padding: 20px 24px;
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-/* 顶部一体化工具栏 */
-.card-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 18px;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.toolbar-left {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-shrink: 0;
-}
-.card-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #0f172a;
-}
-.count-badge {
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.toolbar-right {
+.toolbar-filters {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--app-space-2);
   flex-wrap: wrap;
 }
 
 .exam-select {
   width: 180px;
+  flex: 0 0 180px;
 }
+.exam-select :deep(.arco-select),
+.status-select :deep(.arco-select) { width: 100%; }
 .status-select {
-  width: 110px;
+  width: 120px;
+  flex: 0 0 120px;
 }
 .search-input {
-  width: 200px;
+  width: 210px;
+  flex: 0 0 210px;
 }
 
 .action-btn-group {
+  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   align-items: center;
 }
+
+@media (max-width: 760px) {
+  .exam-select { width: min(100%, 210px); flex: 1 1 180px; }
+  .status-select { width: 120px; flex-basis: 120px; }
+  .search-input { width: min(100%, 210px); flex: 1 1 180px; }
+}
 .pipeline-btn {
-  border-radius: 6px;
   font-weight: 600;
 }
 
@@ -545,7 +508,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--app-radius-control);
   font-size: 12px;
   font-weight: 500;
 }
@@ -558,14 +521,6 @@ onMounted(() => {
   justify-content: center;
 }
 
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid #f1f5f9;
-}
 .footer-total {
   font-size: 12px;
   color: #64748b;

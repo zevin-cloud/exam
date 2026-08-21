@@ -2,7 +2,13 @@
   <div class="markdown-answer" :class="{ 'is-empty': !hasAnswer }">
     <div v-if="hasAnswer" ref="contentRef" class="markdown-body" v-html="renderedHtml" @click="handleContentClick"></div>
     <span v-else class="empty-answer">{{ emptyText }}</span>
-    <el-image-viewer v-if="previewUrl" :url-list="[previewUrl]" hide-on-click-modal @close="previewUrl = ''" />
+    <a-image-preview
+      v-if="previewUrl"
+      :src="previewUrl"
+      :visible="Boolean(previewUrl)"
+      mask-closable
+      @close="previewUrl = ''"
+    />
   </div>
 </template>
 
@@ -173,7 +179,7 @@ onBeforeUnmount(releaseObjectUrls)
 .markdown-body :deep(pre) {
   padding: 14px;
   overflow: auto;
-  border-radius: 8px;
+  border-radius: var(--app-radius-panel);
   color: #dce7f7;
   background: #182335;
 }
@@ -186,8 +192,8 @@ onBeforeUnmount(releaseObjectUrls)
   max-height: 520px;
   margin: 14px 0;
   border: 1px solid #d8e0eb;
-  border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(24, 35, 53, 0.08);
+  border-radius: var(--app-radius-panel);
+  box-shadow: var(--app-shadow-panel);
   cursor: zoom-in;
   object-fit: contain;
 }

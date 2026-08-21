@@ -3,12 +3,12 @@
     <!-- 顶栏操作栏 -->
     <header class="editor-header glass-panel">
       <div class="header-left">
-        <el-button link @click="goBack">
+        <a-button type="text" @click="goBack">
           <svg class="w-4 h-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 18 9 12 15 6" />
           </svg>
           返回列表
-        </el-button>
+        </a-button>
         <div class="h-4 w-px bg-slate-200 mx-2"></div>
         <input 
           v-model="paperForm.title" 
@@ -23,9 +23,9 @@
           <span class="text-slate-300">|</span>
           <span>题目数: <strong class="text-slate-700">{{ elements.length }}</strong> 题</span>
         </div>
-        <el-button type="primary" :loading="saving" @click="savePaper">
+        <a-button type="primary" :loading="saving" @click="savePaper">
           保存试卷
-        </el-button>
+        </a-button>
       </div>
     </header>
 
@@ -110,26 +110,26 @@
             <div class="card-toolbar">
               <div class="flex items-center gap-2">
                 <span class="elem-index">{{ index + 1 }}</span>
-                <el-tag size="small" :type="getTypeTag(elem.type)">{{ getTypeName(elem.type) }}</el-tag>
+                <a-tag size="small" :color="getTypeTagColor(elem.type)">{{ getTypeName(elem.type) }}</a-tag>
                 <span class="text-xs text-slate-400">分值: {{ elem.exam_config?.score || 5 }}分</span>
               </div>
 
               <div class="card-actions-mini flex items-center gap-1" @click.stop>
-                <el-button link size="small" :disabled="index === 0" @click="moveElem(index, -1)">
+                <a-button type="text" size="mini" :disabled="index === 0" @click="moveElem(index, -1)">
                   <ArrowUp :size="13" />
-                </el-button>
-                <el-button link size="small" :disabled="index === elements.length - 1" @click="moveElem(index, 1)">
+                </a-button>
+                <a-button type="text" size="mini" :disabled="index === elements.length - 1" @click="moveElem(index, 1)">
                   <ArrowDown :size="13" />
-                </el-button>
-                <el-button link type="danger" size="small" @click="removeElem(index)">
+                </a-button>
+                <a-button type="text" status="danger" size="mini" @click="removeElem(index)">
                   <Trash2 :size="13" />
-                </el-button>
+                </a-button>
               </div>
             </div>
 
             <!-- 题干快速编辑 -->
             <div class="mt-3">
-              <el-input 
+              <a-input
                 v-model="elem.title" 
                 placeholder="请输入题干描述..." 
                 size="default"
@@ -169,102 +169,101 @@
         <!-- 试卷全局设置 -->
         <div v-if="!selectedElem" class="global-settings mt-3">
           <div class="text-xs font-bold text-slate-600 mb-2">试卷全局参数</div>
-          <el-form label-position="top" size="small">
-            <el-form-item label="建议作答时长 (分钟)">
-              <el-input-number v-model="paperForm.suggest_duration" :min="5" :max="240" class="w-full" />
-            </el-form-item>
-            <el-form-item label="及格分数线 (分)">
-              <el-input-number v-model="paperForm.pass_score" :min="1" :max="1000" class="w-full" />
-            </el-form-item>
-            <el-form-item label="试卷分类">
-              <el-input v-model="paperForm.category" placeholder="如：合规、安全、技术研发" />
-            </el-form-item>
-            <el-form-item label="试卷说明">
-              <el-input v-model="paperForm.description" type="textarea" :rows="3" placeholder="考生作答前展示的须知与说明" />
-            </el-form-item>
-          </el-form>
+          <a-form layout="vertical" size="small">
+            <a-form-item label="建议作答时长 (分钟)">
+              <a-input-number v-model="paperForm.suggest_duration" :min="5" :max="240" class="w-full" />
+            </a-form-item>
+            <a-form-item label="及格分数线 (分)">
+              <a-input-number v-model="paperForm.pass_score" :min="1" :max="1000" class="w-full" />
+            </a-form-item>
+            <a-form-item label="试卷分类">
+              <a-input v-model="paperForm.category" placeholder="如：合规、安全、技术研发" />
+            </a-form-item>
+            <a-form-item label="试卷说明">
+              <a-textarea v-model="paperForm.description" :rows="3" placeholder="考生作答前展示的须知与说明" />
+            </a-form-item>
+          </a-form>
         </div>
 
         <!-- 当前选中题目属性配置 -->
         <div v-else class="element-settings mt-3">
           <div class="flex justify-between items-center mb-3">
             <span class="text-xs font-bold text-blue-600">当前正在配置第 {{ getSelectedElemIndex() }} 题</span>
-            <el-button link size="small" @click="selectedElem = null">切回试卷全局</el-button>
+            <a-button type="text" size="mini" @click="selectedElem = null">切回试卷全局</a-button>
           </div>
 
-          <el-form label-position="top" size="small">
-            <el-form-item label="题目分值 (分)" required>
-              <el-input-number v-model="selectedElem.exam_config.score" :min="1" :max="100" class="w-full" />
-            </el-form-item>
+          <a-form layout="vertical" size="small">
+            <a-form-item label="题目分值 (分)" required>
+              <a-input-number v-model="selectedElem.exam_config.score" :min="1" :max="100" class="w-full" />
+            </a-form-item>
 
             <!-- 选项编辑管理 (单选/多选) -->
             <template v-if="selectedElem.type === 'Radio' || selectedElem.type === 'Checkbox'">
-              <el-form-item label="选项内容与管理">
+              <a-form-item label="选项内容与管理">
                 <div class="flex flex-col gap-2 w-full">
                   <div v-for="(opt, idx) in selectedElem.options" :key="opt.value" class="flex gap-2 items-center">
                     <span class="w-6 font-bold text-slate-500 text-center">{{ opt.value }}</span>
-                    <el-input v-model="opt.label" :placeholder="`选项 ${opt.value} 描述`" class="flex-1" />
-                    <el-button link type="danger" size="small" :disabled="selectedElem.options.length <= 2" @click="removeOption(selectedElem, idx)">
+                    <a-input v-model="opt.label" :placeholder="`选项 ${opt.value} 描述`" class="flex-1" />
+                    <a-button type="text" status="danger" size="mini" :disabled="selectedElem.options.length <= 2" @click="removeOption(selectedElem, idx)">
                       <Trash2 :size="12" />
-                    </el-button>
+                    </a-button>
                   </div>
-                  <el-button size="small" plain type="primary" class="mt-1" @click="addOption(selectedElem)">
+                  <a-button size="mini" type="outline" class="mt-1" @click="addOption(selectedElem)">
                     + 添加选项
-                  </el-button>
+                  </a-button>
                 </div>
-              </el-form-item>
+              </a-form-item>
 
-              <el-form-item label="正确答案 (单选)" v-if="selectedElem.type === 'Radio'" required>
-                <el-select v-model="selectedElem.exam_config.correct_answer[0]" placeholder="选择正确选项" class="w-full">
-                  <el-option v-for="opt in selectedElem.options" :key="opt.value" :label="`${opt.value}. ${opt.label}`" :value="opt.value" />
-                </el-select>
-              </el-form-item>
+              <a-form-item label="正确答案 (单选)" v-if="selectedElem.type === 'Radio'" required>
+                <a-select v-model="selectedElem.exam_config.correct_answer[0]" placeholder="选择正确选项" class="w-full">
+                  <a-option v-for="opt in selectedElem.options" :key="opt.value" :label="`${opt.value}. ${opt.label}`" :value="opt.value" />
+                </a-select>
+              </a-form-item>
 
-              <el-form-item label="正确答案 (多选)" v-else required>
-                <el-select v-model="selectedElem.exam_config.correct_answer" multiple placeholder="多选正确答案" class="w-full">
-                  <el-option v-for="opt in selectedElem.options" :key="opt.value" :label="`${opt.value}. ${opt.label}`" :value="opt.value" />
-                </el-select>
-              </el-form-item>
+              <a-form-item label="正确答案 (多选)" v-else required>
+                <a-select v-model="selectedElem.exam_config.correct_answer" multiple placeholder="多选正确答案" class="w-full">
+                  <a-option v-for="opt in selectedElem.options" :key="opt.value" :label="`${opt.value}. ${opt.label}`" :value="opt.value" />
+                </a-select>
+              </a-form-item>
             </template>
 
             <template v-else-if="selectedElem.type === 'TrueFalse'">
-              <el-form-item label="正确答案 (判断)" required>
-                <el-radio-group v-model="selectedElem.exam_config.correct_answer[0]">
-                  <el-radio label="true">正确</el-radio>
-                  <el-radio label="false">错误</el-radio>
-                </el-radio-group>
-              </el-form-item>
+              <a-form-item label="正确答案 (判断)" required>
+                <a-radio-group v-model="selectedElem.exam_config.correct_answer[0]">
+                  <a-radio value="true">正确</a-radio>
+                  <a-radio value="false">错误</a-radio>
+                </a-radio-group>
+              </a-form-item>
             </template>
 
             <template v-else-if="selectedElem.type === 'FillBlank'">
-              <el-form-item label="标准答案关键词 (支持多个同义词以英文逗号分隔)">
-                <el-input 
+              <a-form-item label="标准答案关键词 (支持多个同义词以英文逗号分隔)">
+                <a-input
                   v-model="fillBlankAnswerStr" 
                   placeholder="如：FastAPI, fastapi, 异步框架" 
                   @input="onFillBlankAnswerChange"
                 />
-              </el-form-item>
+              </a-form-item>
             </template>
 
             <template v-else>
-              <el-form-item label="主观题采分点与参考标准 (供阅卷考官参考)">
-                <el-input 
+              <a-form-item label="主观题采分点与参考标准 (供阅卷考官参考)">
+                <a-textarea
                   v-model="selectedElem.exam_config.correct_answer[0]" 
-                  type="textarea" 
                   :rows="3" 
                   placeholder="写明回答要点及分值分布" 
                 />
-              </el-form-item>
+              </a-form-item>
             </template>
 
-            <el-form-item label="所属知识点标签">
-              <el-input v-model="selectedElem.exam_config.knowledge_tag" placeholder="用于统计员工知识盲区" />
-            </el-form-item>
+            <a-form-item label="所属知识点标签">
+              <a-input v-model="selectedElem.exam_config.knowledge_tag" placeholder="用于统计员工知识盲区" />
+            </a-form-item>
 
-            <el-form-item label="答案官方解析">
-              <el-input v-model="selectedElem.exam_config.analysis" type="textarea" :rows="2" placeholder="交卷后向考生展示" />
-            </el-form-item>
-          </el-form>
+            <a-form-item label="答案官方解析">
+              <a-textarea v-model="selectedElem.exam_config.analysis" :rows="2" placeholder="交卷后向考生展示" />
+            </a-form-item>
+          </a-form>
         </div>
       </aside>
     </div>
@@ -275,7 +274,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { paperApi } from '@/api'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import {
   LayoutGrid,
   CircleDot,
@@ -326,7 +325,7 @@ const fetchPaperDetail = async () => {
     const page = res.schema_data?.pages?.[0]
     elements.value = page?.elements || []
   } catch (e) {
-    ElMessage.error('加载试卷详情失败')
+    Message.error('加载试卷详情失败')
   }
 }
 
@@ -408,7 +407,7 @@ const addOption = (elem) => {
 
 const removeOption = (elem, idx) => {
   if (elem.options.length <= 2) {
-    ElMessage.warning('单选/多选至少保留两个选项')
+    Message.warning('单选/多选至少保留两个选项')
     return
   }
   elem.options.splice(idx, 1)
@@ -431,11 +430,11 @@ const removeElem = (index) => {
 
 const savePaper = async () => {
   if (!paperForm.value.title) {
-    ElMessage.warning('请输入试卷标题')
+    Message.warning('请输入试卷标题')
     return
   }
   if (elements.value.length === 0) {
-    ElMessage.warning('试卷中至少需要添加一道题目')
+    Message.warning('试卷中至少需要添加一道题目')
     return
   }
 
@@ -463,10 +462,10 @@ const savePaper = async () => {
   try {
     if (paperId) {
       await paperApi.updatePaper(paperId, payload)
-      ElMessage.success('试卷更新成功！')
+      Message.success('试卷更新成功！')
     } else {
       await paperApi.createPaper(payload)
-      ElMessage.success('试卷创建成功！')
+      Message.success('试卷创建成功！')
     }
     router.push('/admin/papers')
   } catch (e) {
@@ -491,15 +490,15 @@ const getTypeName = (type) => {
   return map[type] || type
 }
 
-const getTypeTag = (type) => {
+const getTypeTagColor = (type) => {
   const map = {
-    Radio: 'primary',
-    Checkbox: 'success',
-    TrueFalse: 'warning',
-    FillBlank: 'info',
-    Textarea: 'danger'
+    Radio: 'blue',
+    Checkbox: 'green',
+    TrueFalse: 'orange',
+    FillBlank: 'gray',
+    Textarea: 'red'
   }
-  return map[type] || 'info'
+  return map[type] || 'gray'
 }
 
 const isOptionCorrect = (elem, optValue) => {
@@ -521,17 +520,19 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 100px);
+  max-width: var(--app-content-max);
+  margin: 0 auto;
 }
 
 .editor-header {
   height: 56px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--color-bg-2);
+  border: 1px solid var(--color-border-2);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  border-radius: 12px;
+  border-radius: var(--app-radius-panel);
   margin-bottom: 16px;
 }
 
@@ -557,11 +558,11 @@ onMounted(() => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--app-space-5);
 }
 .score-summary {
   font-size: 13px;
-  color: #64748b;
+  color: var(--color-text-3);
   display: flex;
   gap: 10px;
   align-items: center;
@@ -570,15 +571,15 @@ onMounted(() => {
 .editor-workspace {
   flex: 1;
   display: flex;
-  gap: 16px;
+  gap: var(--app-space-4);
   min-height: 0;
 }
 
 .toolbox-panel {
   width: 220px;
-  background: white;
+  background: var(--color-bg-2);
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--app-radius-panel);
   flex-shrink: 0;
   overflow-y: auto;
 }
@@ -605,9 +606,9 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--color-fill-1);
+  border: 1px solid var(--color-border-2);
+  border-radius: var(--app-radius-control);
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: left;
@@ -646,10 +647,10 @@ onMounted(() => {
 }
 
 .canvas-card {
-  background: white;
+  background: var(--color-bg-2);
   padding: 18px 20px;
-  border-radius: 12px;
-  border: 1.5px solid #e2e8f0;
+  border-radius: var(--app-radius-panel);
+  border: 1px solid var(--color-border-2);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -681,10 +682,26 @@ onMounted(() => {
 
 .inspector-panel {
   width: 290px;
-  background: white;
+  background: var(--color-bg-2);
   padding: 16px;
-  border-radius: 12px;
+  border-radius: var(--app-radius-panel);
   flex-shrink: 0;
   overflow-y: auto;
+}
+@media (max-width: 900px) {
+  .paper-editor-layout { height: auto; min-height: 100%; }
+  .editor-header { height: auto; min-height: 64px; padding: var(--app-space-3) var(--app-space-4); align-items: stretch; flex-direction: column; gap: var(--app-space-3); }
+  .header-left, .header-right { width: 100%; min-width: 0; }
+  .header-right { justify-content: space-between; gap: var(--app-space-3); }
+  .paper-title-input { width: 100%; min-width: 0; }
+  .editor-workspace { flex-direction: column; }
+  .toolbox-panel, .inspector-panel { width: 100%; max-height: none; }
+  .tools-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .canvas-area { overflow: visible; padding: 0; }
+}
+@media (max-width: 520px) {
+  .score-summary { display: none; }
+  .tools-grid { grid-template-columns: 1fr; }
+  .canvas-card { padding: var(--app-space-4); }
 }
 </style>

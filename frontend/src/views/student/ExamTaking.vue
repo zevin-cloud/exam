@@ -33,16 +33,16 @@
       <div class="top-right">
         <div class="progress-info">
           <span class="progress-text">完成度: <strong>{{ answeredCount }}</strong> / {{ totalQuestions }}</span>
-          <el-progress 
-            :percentage="progressPercentage" 
+          <a-progress
+            :percent="progressPercentage / 100"
             :show-text="false" 
             :stroke-width="6"
             class="progress-bar"
           />
         </div>
-        <el-button type="primary" class="submit-btn" :loading="submitting" @click="confirmSubmit">
+        <a-button type="primary" class="submit-btn" :loading="submitting" @click="confirmSubmit">
           交卷
-        </el-button>
+        </a-button>
       </div>
     </header>
 
@@ -60,9 +60,9 @@
           <div class="q-header">
             <div class="q-left-info">
               <span class="q-index-badge">{{ index + 1 }}</span>
-              <el-tag size="small" :type="getTypeTag(elem.type)" effect="light">
+              <a-tag size="small" :color="getTypeTagColor(elem.type)">
                 {{ getTypeName(elem.type) }}
-              </el-tag>
+              </a-tag>
               <span class="q-score">({{ elem.exam_config?.score || 5 }}分)</span>
             </div>
             <span class="q-tag">{{ elem.exam_config?.knowledge_tag || '通用知识' }}</span>
@@ -135,11 +135,11 @@
 
           <!-- 填空题 (FillBlank) -->
           <div v-else-if="elem.type.toLowerCase() === 'fillblank'" class="fill-blank-box">
-            <el-input 
+            <a-input
               v-model="answers[elem.id]" 
               placeholder="请在此输入您的答案..." 
               size="large"
-              clearable
+              allow-clear
               @input="onAnswerChange(elem.id)"
             />
           </div>
@@ -185,13 +185,12 @@
     </div>
 
     <!-- 切屏作弊警告弹窗 -->
-    <el-dialog
-      v-model="screenSwitchWarning"
+    <a-modal
+      v-model:visible="screenSwitchWarning"
       title="考场防作弊监控警示"
-      width="420px"
-      :show-close="false"
-      :close-on-click-modal="false"
-      center
+      width="480px"
+      :closable="false"
+      :mask-closable="false"
     >
       <div class="text-center py-2">
         <p class="text-red-500 font-bold text-base mb-2">检测到您离开了考试页面！</p>
@@ -201,9 +200,9 @@
         <p class="text-xs text-slate-400 mt-2">若切屏次数超过上限，系统将自动锁定考卷并强制提交。</p>
       </div>
       <template #footer>
-        <el-button type="primary" @click="closeWarningDialog">我知道了，继续答题</el-button>
+        <a-button type="primary" @click="closeWarningDialog">我知道了，继续答题</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
@@ -211,7 +210,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { examApi } from '@/api'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { Message, Modal } from '@arco-design/web-vue'
 import confetti from 'canvas-confetti'
 import { Check, X, ShieldAlert } from 'lucide-vue-next'
 import MarkdownEssayEditor from '@/components/exam/MarkdownEssayEditor.vue'
@@ -280,7 +279,7 @@ const fetchExamData = async () => {
 
     startTimers()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '进入考试失败')
+    Message.error(e.response?.data?.detail || '进入考试失败')
     router.replace('/student/exams')
   }
 }
@@ -292,7 +291,7 @@ const startTimers = () => {
       remainingSeconds.value--
     } else {
       clearInterval(timerInterval)
-      ElMessage.warning('考试时间已截止，正在自动为您交卷...')
+      Message.warning('考试时间已截止，正在自动为您交卷...')
       submitExamAction(true)
     }
   }, 1000)
@@ -357,11 +356,12 @@ const handleVisibilityChange = () => {
     screenSwitchCount.value++
     saveDraft()
     if (screenSwitchCount.value >= maxLimit) {
-      ElMessageBox.alert(
-        `您切屏已达 ${screenSwitchCount.value} 次（考场允许最大切屏 ${maxLimit} 次），已触发强制交卷！`,
-        '切屏违规交卷',
-        { confirmButtonText: '确定', callback: () => submitExamAction(true) }
-      )
+      Modal.warning({
+        title: '切屏违规交卷',
+        content: `您切屏已达 ${screenSwitchCount.value} 次（考场允许最大切屏 ${maxLimit} 次），已触发强制交卷！`,
+        okText: '确定',
+        onOk: () => submitExamAction(true),
+      })
     } else {
       screenSwitchWarning.value = true
     }
@@ -380,12 +380,13 @@ const confirmSubmit = () => {
     msg = `您还有 ${unanswered} 道题尚未作答，确定要现在提交试卷吗？`
   }
 
-  ElMessageBox.confirm(msg, '确认交卷', {
-    confirmButtonText: '确定交卷',
-    cancelButtonText: '继续检查',
-    type: unanswered > 0 ? 'warning' : 'info'
-  }).then(() => {
-    submitExamAction(false)
+  Modal.confirm({
+    title: '确认交卷',
+    content: msg,
+    okText: '确定交卷',
+    cancelText: '继续检查',
+    simple: false,
+    onOk: () => submitExamAction(false),
   })
 }
 
@@ -406,10 +407,10 @@ const submitExamAction = async (isForce = false) => {
       origin: { y: 0.6 }
     })
 
-    ElMessage.success(res.message || '交卷成功！')
+    Message.success(res.message || '交卷成功！')
     router.replace(`/exam/result/${recordId.value}`)
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '交卷失败')
+    Message.error(e.response?.data?.detail || '交卷失败')
   } finally {
     submitting.value = false
   }
@@ -432,15 +433,15 @@ const getTypeName = (type) => {
   return map[type.toLowerCase()] || '客观题'
 }
 
-const getTypeTag = (type) => {
+const getTypeTagColor = (type) => {
   const map = {
-    radio: 'primary',
-    checkbox: 'success',
-    truefalse: 'warning',
-    fillblank: 'info',
-    textarea: 'danger'
+    radio: 'blue',
+    checkbox: 'green',
+    truefalse: 'orange',
+    fillblank: 'gray',
+    textarea: 'red'
   }
-  return map[type.toLowerCase()] || 'info'
+  return map[type.toLowerCase()] || 'gray'
 }
 
 onMounted(() => {
@@ -464,10 +465,10 @@ onUnmounted(() => {
 }
 
 .exam-top-bar {
-  height: 68px;
-  padding: 0 32px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
+  height: 64px;
+  padding: 0 var(--app-space-6);
+  background: var(--color-bg-2);
+  border-bottom: 1px solid var(--color-border-2);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -487,7 +488,7 @@ onUnmounted(() => {
   font-size: 11px;
   font-weight: 700;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--app-radius-control);
   border: 1px solid #bfdbfe;
 }
 .paper-title-tag .title {
@@ -503,10 +504,10 @@ onUnmounted(() => {
 }
 
 .timer-box {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-fill-1);
+  border: 1px solid var(--color-border-2);
   padding: 6px 16px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-control);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -535,10 +536,10 @@ onUnmounted(() => {
   gap: 6px;
   font-size: 12px;
   color: #64748b;
-  background: #f8fafc;
+  background: var(--color-fill-1);
   padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid #e2e8f0;
+  border-radius: var(--app-radius-control);
+  border: 1px solid var(--color-border-2);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -572,17 +573,17 @@ onUnmounted(() => {
 .submit-btn {
   font-weight: 600;
   padding: 0 24px;
-  border-radius: 9px;
+  border-radius: var(--app-radius-control);
 }
 
 .exam-main-content {
   flex: 1;
-  max-width: 1200px;
+  max-width: var(--app-content-max);
   width: 100%;
   margin: 24px auto;
   padding: 0 20px;
   display: flex;
-  gap: 24px;
+  gap: var(--app-space-6);
   align-items: flex-start;
 }
 
@@ -594,10 +595,10 @@ onUnmounted(() => {
 }
 
 .question-card {
-  background: white;
-  padding: 28px;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
+  background: var(--color-bg-2);
+  padding: var(--app-space-6);
+  border-radius: var(--app-radius-panel);
+  border: 1px solid var(--color-border-2);
   transition: border-color 0.2s ease;
 }
 .card-active {
@@ -660,7 +661,7 @@ onUnmounted(() => {
   gap: 12px;
   padding: 12px 18px;
   border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--app-radius-control);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -702,9 +703,9 @@ onUnmounted(() => {
   flex: 1;
   height: 44px;
   padding: 0 18px;
-  border-radius: 9px;
+  border-radius: var(--app-radius-control);
   border: 1.5px solid #e2e8f0;
-  background: white;
+  background: var(--color-bg-2);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -743,7 +744,7 @@ onUnmounted(() => {
   top: 92px;
   background: white;
   padding: 20px;
-  border-radius: 14px;
+  border-radius: var(--app-radius-panel);
 }
 .sheet-header {
   display: flex;
@@ -820,5 +821,22 @@ onUnmounted(() => {
   background: #3b82f6;
   border-color: #3b82f6;
   color: white;
+}
+@media (max-width: 900px) {
+  .exam-top-bar { height: auto; min-height: 64px; padding: var(--app-space-3) var(--app-space-4); align-items: flex-start; flex-wrap: wrap; gap: var(--app-space-3); }
+  .top-center { order: 3; width: 100%; justify-content: space-between; }
+  .top-right { gap: var(--app-space-3); }
+  .exam-main-content { margin: var(--app-space-4) auto; padding: 0 var(--app-space-4); flex-direction: column; gap: var(--app-space-4); }
+  .questions-scroll-area, .answer-sheet-panel { width: 100%; }
+  .answer-sheet-panel { position: static; }
+}
+@media (max-width: 560px) {
+  .exam-top-bar { padding-inline: 14px; }
+  .paper-title-tag .badge, .progress-info { display: none; }
+  .top-center { align-items: stretch; flex-direction: column; }
+  .timer-box, .switch-guard-tag { width: 100%; justify-content: center; }
+  .exam-main-content { padding-inline: 14px; }
+  .question-card { padding: var(--app-space-4); }
+  .option-item { padding: var(--app-space-3); }
 }
 </style>

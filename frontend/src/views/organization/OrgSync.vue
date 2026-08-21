@@ -1,30 +1,28 @@
 <template>
-  <div class="org-manage-page">
-    <!-- 顶部操作横栏 (去除了 Emoji 图标，改用现代统一矢量图标与干净文字) -->
-    <div class="top-action-bar">
-      <div class="page-meta">
-        <h2 class="page-title">组织架构与成员管理</h2>
-        <p class="page-subtitle">统一管理企业部门层级、员工名册与 OneAuth 身份源数据实时对齐</p>
-      </div>
-
-      <div class="top-btns flex items-center gap-2.5 flex-wrap">
-        <el-button @click="openSSOConfigDialog">
+  <AppPage class="org-manage-page">
+    <AppPageHeader
+      eyebrow="系统与集成"
+      title="组织架构与成员管理"
+      description="统一管理企业部门层级、员工名册与 OneAuth 身份源数据实时对齐"
+    >
+      <template #actions>
+        <a-button @click="openSSOConfigDialog">
           <Settings :size="14" class="btn-icon" /> 身份源配置
-        </el-button>
-        <el-button type="info" plain :loading="syncingDept" @click="handleSyncDepartmentsOnly">
+        </a-button>
+        <a-button type="outline" :loading="syncingDept" @click="handleSyncDepartmentsOnly">
           <Building2 :size="14" class="btn-icon" /> 同步部门架构
-        </el-button>
-        <el-button type="primary" :loading="loadingCandidates" @click="openCandidateUsersDialog">
+        </a-button>
+        <a-button type="primary" :loading="loadingCandidates" @click="openCandidateUsersDialog">
           <UserPlus :size="14" class="btn-icon" /> 选择同步 OneAuth 成员
-        </el-button>
-        <el-button type="success" plain :loading="syncingAll" @click="handleSyncAllData">
+        </a-button>
+        <a-button type="outline" status="success" :loading="syncingAll" @click="handleSyncAllData">
           <RefreshCw :size="14" class="btn-icon" /> 一键全量同步
-        </el-button>
-      </div>
-    </div>
+        </a-button>
+      </template>
+    </AppPageHeader>
 
     <!-- 主体两栏布局：左侧部门树 + 右侧成员列表 -->
-    <div class="org-layout-grid mt-4">
+    <div class="org-layout-grid">
       <!-- 左栏：组织架构树卡片 (设置 sticky 保持视口固定不滑移) -->
       <div class="dept-tree-card app-card">
         <div class="dept-card-header">
@@ -32,29 +30,29 @@
             <h3 class="tree-title">组织架构</h3>
             <p class="tree-subtitle">部门层级与关联</p>
           </div>
-          <el-button type="primary" size="small" class="new-dept-btn" @click="openCreateDeptDialog(null)">
+          <a-button type="primary" size="small" class="new-dept-btn" @click="openCreateDeptDialog(null)">
             + 新建部门
-          </el-button>
+          </a-button>
         </div>
 
         <!-- 部门搜索框 -->
         <div class="dept-search-wrap">
-          <el-input 
-            v-model="deptFilterText" 
-            placeholder="搜索部门名称" 
-            clearable
+          <a-input
+            v-model="deptFilterText"
+            placeholder="搜索部门名称"
+            allow-clear
             size="default"
           >
             <template #prefix>
               <Search :size="14" class="text-slate-400" />
             </template>
-          </el-input>
+          </a-input>
         </div>
 
         <!-- 部门树形组件 -->
         <div class="dept-tree-body">
-          <div 
-            class="all-dept-item" 
+          <div
+            class="all-dept-item"
             :class="{ 'is-selected': selectedDeptId === null }"
             @click="selectDept(null)"
           >
@@ -65,38 +63,33 @@
             <span class="dept-count-badge">{{ users.length }}</span>
           </div>
 
-          <el-tree
-            ref="treeRef"
-            :data="deptTreeData"
-            :props="{ label: 'name', children: 'children' }"
-            :filter-node-method="filterNode"
-            node-key="id"
-            default-expand-all
-            highlight-current
-            @node-click="handleTreeNodeClick"
+          <a-tree
+            :data="filteredDeptTreeData"
+            :field-names="{ title: 'name', key: 'id', children: 'children' }"
+            v-model:expanded-keys="expandedDeptKeys"
+            block-node
+            @select="handleTreeSelect"
           >
-            <template #default="{ node, data }">
+            <template #title="data">
               <div class="custom-tree-node">
                 <div class="node-left">
                   <FolderTree :size="14" class="dept-icon" />
-                  <span class="node-label">{{ node.label }}</span>
+                  <span class="node-label">{{ data.name }}</span>
                 </div>
 
                 <div class="node-actions" @click.stop>
-                  <el-dropdown trigger="click" @command="(cmd) => handleDeptCommand(cmd, data)">
+                  <a-dropdown trigger="click" @select="(cmd) => handleDeptCommand(cmd, data)">
                     <span class="more-dot">•••</span>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="addChild">+ 添加子部门</el-dropdown-item>
-                        <el-dropdown-item command="edit">编辑名称</el-dropdown-item>
-                        <el-dropdown-item command="delete" divided class="text-red-500">删除部门...</el-dropdown-item>
-                      </el-dropdown-menu>
+                    <template #content>
+                      <a-doption value="addChild">+ 添加子部门</a-doption>
+                      <a-doption value="edit">编辑名称</a-doption>
+                      <a-doption value="delete" class="text-red-500">删除部门...</a-doption>
                     </template>
-                  </el-dropdown>
+                  </a-dropdown>
                 </div>
               </div>
             </template>
-          </el-tree>
+          </a-tree>
         </div>
       </div>
 
@@ -109,25 +102,25 @@
           </div>
 
           <div class="header-action-box">
-            <el-input 
-              v-model="userSearchKeyword" 
-              placeholder="按成员姓名或邮箱搜索" 
-              clearable 
+            <a-input
+              v-model="userSearchKeyword"
+              placeholder="按成员姓名或邮箱搜索"
+              allow-clear
               class="user-search-input"
             >
               <template #prefix>
                 <Search :size="14" class="text-slate-400" />
               </template>
-            </el-input>
+            </a-input>
 
-            <el-button type="primary" @click="openCreateUserDialog">
+            <a-button type="primary" @click="openCreateUserDialog">
               + 添加成员
-            </el-button>
+            </a-button>
           </div>
         </div>
 
         <!-- 批量操作栏（多选成员时显示） -->
-        <transition name="el-fade-in">
+        <transition name="fade">
           <div v-if="selectedUsers.length > 0" class="batch-bar">
             <div class="batch-left">
               <span class="batch-badge">
@@ -135,15 +128,14 @@
               </span>
             </div>
             <div class="batch-right">
-              <el-dropdown trigger="click" @command="handleBatchRoleChange">
-                <el-button type="primary" :loading="batchRoleLoading">
+              <a-dropdown trigger="click" @select="handleBatchRoleChange">
+                <a-button type="primary" :loading="batchRoleLoading">
                   <ShieldCheck :size="15" class="mr-1.5" />
                   批量设置角色
                   <ChevronDown :size="14" class="ml-1" />
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu class="batch-role-menu">
-                    <el-dropdown-item command="student">
+                </a-button>
+                <template #content>
+                    <a-doption value="student">
                       <div class="batch-role-item">
                         <span class="role-dot student"></span>
                         <div>
@@ -151,8 +143,8 @@
                           <div class="role-item-desc">仅参加考试与查卷 (student)</div>
                         </div>
                       </div>
-                    </el-dropdown-item>
-                    <el-dropdown-item command="teacher" divided>
+                    </a-doption>
+                    <a-doption value="teacher">
                       <div class="batch-role-item">
                         <span class="role-dot teacher"></span>
                         <div>
@@ -160,8 +152,8 @@
                           <div class="role-item-desc">试卷题库与阅卷考务 (teacher)</div>
                         </div>
                       </div>
-                    </el-dropdown-item>
-                    <el-dropdown-item command="super_admin" divided>
+                    </a-doption>
+                    <a-doption value="super_admin">
                       <div class="batch-role-item">
                         <span class="role-dot admin"></span>
                         <div>
@@ -169,37 +161,36 @@
                           <div class="role-item-desc">全系统配置与管理权限 (super_admin)</div>
                         </div>
                       </div>
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
+                    </a-doption>
                 </template>
-              </el-dropdown>
+              </a-dropdown>
 
-              <el-button type="danger" plain :loading="batchDeleteLoading" @click="handleBatchDeleteUsers">
+              <a-button type="outline" status="danger" :loading="batchDeleteLoading" @click="handleBatchDeleteUsers">
                 <Trash2 :size="15" class="mr-1.5" />
                 批量删除
-              </el-button>
+              </a-button>
 
-              <el-button @click="clearUserSelection">
+              <a-button @click="clearUserSelection">
                 取消选择
-              </el-button>
+              </a-button>
             </div>
           </div>
         </transition>
 
         <!-- 成员表格 -->
         <div class="table-container">
-          <el-table 
-            ref="userTableRef"
-            :data="paginatedUsers" 
-            style="width: 100%" 
-            v-loading="loading"
+          <a-table
+            :columns="userColumns"
+            :data="paginatedUsers"
+            :loading="loading"
+            :pagination="false"
+            :row-selection="{ type: 'checkbox', showCheckedAll: true }"
+            v-model:selected-keys="selectedUserKeys"
             row-key="id"
-            @selection-change="handleUserSelectionChange"
             class="custom-table"
+            @selection-change="handleUserSelectionChange"
           >
-            <el-table-column type="selection" width="48" align="center" />
-            <el-table-column label="成员信息" min-width="220">
-              <template #default="{ row }">
+            <template #member="{ record: row }">
                 <div class="user-cell">
                   <div class="avatar-cell" :style="{ backgroundColor: getAvatarColor(row.full_name) }">
                     {{ getAvatarText(row.full_name) }}
@@ -207,69 +198,58 @@
                   <div class="user-meta-wrap">
                     <div class="user-name-line">
                       <span class="full-name">{{ row.full_name }}</span>
-                      <el-tag v-if="row.role === 'super_admin'" type="danger" size="small" effect="plain">超管</el-tag>
-                      <el-tag v-else-if="row.role === 'teacher'" type="warning" size="small" effect="plain">出题人</el-tag>
+                      <a-tag v-if="row.role === 'super_admin'" color="red" size="small">超管</a-tag>
+                      <a-tag v-else-if="row.role === 'teacher'" color="orange" size="small">出题人</a-tag>
                     </div>
                     <span class="user-email-text">{{ row.email || row.username }}</span>
                   </div>
                 </div>
-              </template>
-            </el-table-column>
-
-            <el-table-column prop="username" label="工号/用户名" min-width="130" />
-            <el-table-column prop="department_name" label="所属部门" min-width="140">
-              <template #default="{ row }">
+            </template>
+            <template #department="{ record: row }">
                 <span v-if="row.department_name" class="dept-tag-cell">{{ row.department_name }}</span>
                 <span v-else class="text-slate-400 text-xs">未分配</span>
-              </template>
-            </el-table-column>
-
-            <el-table-column label="系统角色" width="130">
-              <template #default="{ row }">
-                <el-select 
-                  v-model="row.role" 
-                  size="small" 
+            </template>
+            <template #role="{ record: row }">
+                <a-select
+                  v-model="row.role"
+                  size="small"
                   :disabled="row.username === 'admin'"
                   @change="(val) => handleRoleChange(row, val)"
                   class="role-select"
                 >
-                  <el-option label="考生/员工" value="student" />
-                  <el-option label="出题人" value="teacher" />
-                  <el-option label="超级管理员" value="super_admin" />
-                </el-select>
-              </template>
-            </el-table-column>
-
-            <el-table-column label="账号状态" width="100" align="center">
-              <template #default="{ row }">
-                <el-switch 
-                  v-model="row.is_active" 
+                  <a-option label="考生/员工" value="student" />
+                  <a-option label="出题人" value="teacher" />
+                  <a-option label="超级管理员" value="super_admin" />
+                </a-select>
+            </template>
+            <template #status="{ record: row }">
+                <a-switch
+                  v-model="row.is_active"
                   size="small"
                   :disabled="row.username === 'admin'"
                   @change="(val) => handleStatusChange(row, val)"
                 />
-              </template>
-            </el-table-column>
-
-            <el-table-column label="操作" width="160" align="right">
-              <template #default="{ row }">
+            </template>
+            <template #actions="{ record: row }">
                 <div class="row-actions">
-                  <el-button link type="primary" size="small" @click="openEditUserDialog(row)">编辑</el-button>
-                  <el-button link type="warning" size="small" @click="removeFromDept(row)" v-if="row.department_id">移出部门</el-button>
-                  <el-button link type="danger" size="small" :disabled="row.username === 'admin'" @click="handleDeleteUser(row)">删除</el-button>
+                  <a-button type="text" size="mini" @click="openEditUserDialog(row)">编辑</a-button>
+                  <a-button v-if="row.department_id" type="text" status="warning" size="mini" @click="removeFromDept(row)">移出部门</a-button>
+                  <a-button type="text" status="danger" size="mini" :disabled="row.username === 'admin'" @click="handleDeleteUser(row)">删除</a-button>
                 </div>
-              </template>
-            </el-table-column>
-          </el-table>
+            </template>
+          </a-table>
 
           <!-- 分页 -->
           <div class="pagination-footer">
-            <el-pagination
-              v-model:current-page="currentPage"
-              v-model:page-size="pageSize"
-              :page-sizes="[10, 20, 50, 100]"
-              layout="total, sizes, prev, pager, next"
+            <a-pagination
+              :current="currentPage"
+              :page-size="pageSize"
+              :page-size-options="[10, 20, 50, 100]"
+              show-total
+              show-page-size
               :total="filteredUsers.length"
+              @change="handlePageChange"
+              @page-size-change="handlePageSizeChange"
             />
           </div>
         </div>
@@ -277,73 +257,63 @@
     </div>
 
     <!-- 弹窗 1：从 OneAuth 选择同步员工对话框 -->
-    <el-dialog
-      v-model="candidateDialogVisible"
+    <a-modal
+      v-model:visible="candidateDialogVisible"
       title="从 OneAuth 选择导入企业员工"
-      width="860px"
-      destroy-on-close
+      width="840px"
+      unmount-on-close
+      :footer="false"
     >
       <div class="candidate-dialog-body">
         <!-- 搜索与筛选工具栏 -->
         <div class="candidate-toolbar flex justify-between items-center mb-4 gap-3 flex-wrap">
           <div class="flex items-center gap-3">
-            <el-input 
-              v-model="candidateKeyword" 
-              placeholder="搜索工号、姓名或部门..." 
-              clearable 
+            <a-input
+              v-model="candidateKeyword"
+              placeholder="搜索工号、姓名或部门..."
+              allow-clear
               style="width: 240px;"
             >
               <template #prefix>
                 <Search :size="14" class="text-slate-400" />
               </template>
-            </el-input>
-            <el-radio-group v-model="candidateFilterType" size="small">
-              <el-radio-button label="all">全部 ({{ allCandidates.length }})</el-radio-button>
-              <el-radio-button label="unsynced">仅未导入 ({{ unsyncedCount }})</el-radio-button>
-              <el-radio-button label="synced">已导入 ({{ syncedCount }})</el-radio-button>
-            </el-radio-group>
+            </a-input>
+            <a-radio-group v-model="candidateFilterType" size="small">
+              <a-radio value="all">全部 ({{ allCandidates.length }})</a-radio>
+              <a-radio value="unsynced">仅未导入 ({{ unsyncedCount }})</a-radio>
+              <a-radio value="synced">已导入 ({{ syncedCount }})</a-radio>
+            </a-radio-group>
           </div>
 
-          <el-button size="small" @click="selectUnsyncedAll">
+          <a-button size="small" @click="selectUnsyncedAll">
             一键全选未导入成员
-          </el-button>
+          </a-button>
         </div>
 
         <!-- 候选人多选表格 -->
-        <el-table 
-          ref="candidateTableRef"
-          :data="filteredCandidates" 
-          style="width: 100%" 
-          height="380px"
+        <a-table
+          :columns="candidateColumns"
+          :data="filteredCandidates"
+          :pagination="false"
+          :scroll="{ y: 380 }"
+          :row-selection="{ type: 'checkbox', showCheckedAll: true }"
+          v-model:selected-keys="selectedCandidateKeys"
           row-key="key"
-          @selection-change="handleCandidateSelectionChange"
         >
-          <el-table-column type="selection" width="50" align="center" :selectable="canSelectCandidate" />
-          
-          <el-table-column label="员工信息" min-width="180">
-            <template #default="{ row }">
+          <template #candidate="{ record: row }">
               <div class="flex items-center gap-2">
                 <span class="font-bold text-slate-800">{{ row.full_name }}</span>
                 <span class="text-xs text-slate-400">({{ row.username }})</span>
               </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column prop="email" label="企业邮箱" min-width="200" />
-          
-          <el-table-column prop="dept_name" label="所属 OneAuth 部门" min-width="160">
-            <template #default="{ row }">
-              <span class="dept-tag-cell">{{ row.dept_name }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="同步状态" width="110" align="center">
-            <template #default="{ row }">
-              <el-tag v-if="row.is_synced" type="success" size="small">已导入</el-tag>
-              <el-tag v-else type="primary" size="small" effect="plain">待同步</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
+          </template>
+          <template #department="{ record: row }">
+            <span class="dept-tag-cell">{{ row.dept_name }}</span>
+          </template>
+          <template #syncStatus="{ record: row }">
+            <a-tag v-if="row.is_synced" color="green" size="small">已导入</a-tag>
+            <a-tag v-else color="blue" size="small">待同步</a-tag>
+          </template>
+        </a-table>
 
         <!-- 底部汇总 -->
         <div class="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
@@ -351,26 +321,26 @@
             已勾选 <strong class="text-blue-600 text-sm">{{ selectedCandidateKeys.length }}</strong> 位员工
           </div>
           <div class="flex gap-2">
-            <el-button @click="candidateDialogVisible = false">取消</el-button>
-            <el-button 
-              type="primary" 
-              :loading="importingUsers" 
+            <a-button @click="candidateDialogVisible = false">取消</a-button>
+            <a-button
+              type="primary"
+              :loading="importingUsers"
               :disabled="!selectedCandidateKeys.length"
               @click="confirmImportCandidates"
             >
               确认导入选中员工 ({{ selectedCandidateKeys.length }})
-            </el-button>
+            </a-button>
           </div>
         </div>
       </div>
-    </el-dialog>
+    </a-modal>
 
     <!-- 弹窗 2：删除部门确认对话框（支持级联删除或仅删除当前部门） -->
-    <el-dialog
-      v-model="deleteDeptDialogVisible"
+    <a-modal
+      v-model:visible="deleteDeptDialogVisible"
       title="删除部门确认"
       width="480px"
-      destroy-on-close
+      unmount-on-close
     >
       <div v-if="targetDeptToDelete" class="p-2 text-sm leading-relaxed">
         <div class="flex items-center gap-2 mb-3">
@@ -388,158 +358,169 @@
 
       <template #footer>
         <div class="flex justify-end gap-2 flex-wrap">
-          <el-button @click="deleteDeptDialogVisible = false">取消</el-button>
-          <el-button 
-            type="danger" 
-            plain 
-            :loading="deletingDept" 
+          <a-button @click="deleteDeptDialogVisible = false">取消</a-button>
+          <a-button
+            type="outline"
+            status="danger"
+            :loading="deletingDept"
             @click="executeDeleteDept(false)"
           >
             仅删除当前部门
-          </el-button>
-          <el-button 
+          </a-button>
+          <a-button
             v-if="targetDeptHasChildren"
-            type="danger" 
-            :loading="deletingDept" 
+            type="primary"
+            status="danger"
+            :loading="deletingDept"
             @click="executeDeleteDept(true)"
           >
             连同子部门一起删除 (级联)
-          </el-button>
+          </a-button>
         </div>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 弹窗 3：新建/编辑部门对话框 -->
-    <el-dialog 
-      v-model="deptDialogVisible" 
-      :title="isEditDept ? '编辑部门名称' : '新建部门'" 
-      width="460px"
-      destroy-on-close
+    <a-modal
+      v-model:visible="deptDialogVisible"
+      :title="isEditDept ? '编辑部门名称' : '新建部门'"
+      width="480px"
+      unmount-on-close
     >
-      <el-form :model="deptForm" label-width="90px">
-        <el-form-item label="部门名称" required>
-          <el-input v-model="deptForm.name" placeholder="请输入部门名称" />
-        </el-form-item>
-        <el-form-item label="上级部门">
-          <el-tree-select
+      <a-form :model="deptForm" :label-col-props="{ span: 6 }" :wrapper-col-props="{ span: 18 }">
+        <a-form-item label="部门名称" required>
+          <a-input v-model="deptForm.name" placeholder="请输入部门名称" />
+        </a-form-item>
+        <a-form-item label="上级部门">
+          <a-tree-select
             v-model="deptForm.parent_id"
             :data="deptTreeData"
-            :props="{ label: 'name', value: 'id', children: 'children' }"
-            node-key="id"
-            value-key="id"
-            :render-after-expand="false"
+            :field-names="{ title: 'name', key: 'id', children: 'children' }"
             placeholder="留空为顶级部门"
-            clearable
-            check-strictly
+            allow-clear
           />
-        </el-form-item>
-      </el-form>
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="deptDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingDept" @click="saveDept">保存</el-button>
+        <a-button @click="deptDialogVisible = false">取消</a-button>
+        <a-button type="primary" :loading="savingDept" @click="saveDept">保存</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 弹窗 4：新建/编辑成员对话框 -->
-    <el-dialog 
-      v-model="userDialogVisible" 
-      :title="isEditUser ? '编辑成员' : '新增成员'" 
-      width="540px"
-      destroy-on-close
+    <a-modal
+      v-model:visible="userDialogVisible"
+      :title="isEditUser ? '编辑成员' : '新增成员'"
+      width="640px"
+      unmount-on-close
     >
-      <el-form :model="userForm" label-width="100px" class="pr-4">
-        <el-form-item label="工号/用户名" required>
-          <el-input v-model="userForm.username" :disabled="isEditUser" placeholder="例如：zw" />
-        </el-form-item>
-        <el-form-item label="成员姓名" required>
-          <el-input v-model="userForm.full_name" placeholder="例如：zw" />
-        </el-form-item>
-        <el-form-item label="企业邮箱" required>
-          <el-input v-model="userForm.email" placeholder="例如：zw@fit2cloud.com" />
-        </el-form-item>
-        <el-form-item label="所属部门">
-          <el-tree-select
+      <a-form :model="userForm" :label-col-props="{ span: 6 }" :wrapper-col-props="{ span: 18 }" class="pr-4">
+        <a-form-item label="工号/用户名" required>
+          <a-input v-model="userForm.username" :disabled="isEditUser" placeholder="例如：zw" />
+        </a-form-item>
+        <a-form-item label="成员姓名" required>
+          <a-input v-model="userForm.full_name" placeholder="例如：zw" />
+        </a-form-item>
+        <a-form-item label="企业邮箱" required>
+          <a-input v-model="userForm.email" placeholder="例如：zw@fit2cloud.com" />
+        </a-form-item>
+        <a-form-item label="所属部门">
+          <a-tree-select
             v-model="userForm.department_id"
             :data="deptTreeData"
-            :props="{ label: 'name', value: 'id', children: 'children' }"
-            node-key="id"
-            value-key="id"
-            :render-after-expand="false"
+            :field-names="{ title: 'name', key: 'id', children: 'children' }"
             placeholder="选择所属部门"
-            check-strictly
-            clearable
+            allow-clear
           />
-        </el-form-item>
-        <el-form-item label="系统角色">
-          <el-radio-group v-model="userForm.role" :disabled="userForm.username === 'admin'">
-            <el-radio label="student">考生/员工</el-radio>
-            <el-radio label="teacher">出题人</el-radio>
-            <el-radio label="super_admin">超级管理员</el-radio>
-          </el-radio-group>
+        </a-form-item>
+        <a-form-item label="系统角色">
+          <a-radio-group v-model="userForm.role" :disabled="userForm.username === 'admin'">
+            <a-radio value="student">考生/员工</a-radio>
+            <a-radio value="teacher">出题人</a-radio>
+            <a-radio value="super_admin">超级管理员</a-radio>
+          </a-radio-group>
           <div v-if="userForm.username === 'admin'" class="text-xs text-amber-600 mt-1">
             🛡️ 内置管理员 (admin) 角色受系统保护，不可修改为其他角色
           </div>
-        </el-form-item>
-        <el-form-item label="初始密码" v-if="!isEditUser">
-          <el-input v-model="userForm.password" placeholder="默认 123456" type="password" show-password />
-        </el-form-item>
-      </el-form>
+        </a-form-item>
+        <a-form-item label="初始密码" v-if="!isEditUser">
+          <a-input-password v-model="userForm.password" placeholder="默认 123456" allow-clear />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="userDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingUser" @click="saveUser">保存</el-button>
+        <a-button @click="userDialogVisible = false">取消</a-button>
+        <a-button type="primary" :loading="savingUser" @click="saveUser">保存</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
     <!-- 弹窗 5：身份源配置对话框 -->
-    <el-dialog 
-      v-model="ssoConfigVisible" 
-      title="OneAuth 统一身份源连接配置" 
-      width="620px"
-      destroy-on-close
+    <a-modal
+      v-model:visible="ssoConfigVisible"
+      title="OneAuth 统一身份源连接配置"
+      width="640px"
+      unmount-on-close
     >
-      <el-form :model="ssoConfigForm" label-width="120px">
-        <el-form-item label="SSO服务地址">
-          <el-input v-model="ssoConfigForm.server_url" placeholder="如 http://192.168.123.233:5174" />
-        </el-form-item>
-        <el-form-item label="Client ID">
-          <el-input v-model="ssoConfigForm.client_id" placeholder="如 app_52a0a477a52301c3" />
-        </el-form-item>
-        <el-form-item label="Client Secret">
-          <el-input v-model="ssoConfigForm.client_secret" type="password" show-password placeholder="OneAuth 分配的 Client Secret" />
-        </el-form-item>
-        <el-form-item label="授权回调地址">
-          <el-input v-model="ssoConfigForm.redirect_uri" :placeholder="currentAutoRedirectUri" />
+      <a-form :model="ssoConfigForm" :label-col-props="{ span: 6 }" :wrapper-col-props="{ span: 18 }">
+        <a-form-item label="SSO服务地址">
+          <a-input v-model="ssoConfigForm.server_url" placeholder="如 http://192.168.123.233:5174" />
+        </a-form-item>
+        <a-form-item label="Client ID">
+          <a-input v-model="ssoConfigForm.client_id" placeholder="如 app_52a0a477a52301c3" />
+        </a-form-item>
+        <a-form-item label="Client Secret">
+          <a-input-password v-model="ssoConfigForm.client_secret" allow-clear placeholder="OneAuth 分配的 Client Secret" />
+        </a-form-item>
+        <a-form-item label="授权回调地址">
+          <a-input v-model="ssoConfigForm.redirect_uri" :placeholder="currentAutoRedirectUri" />
           <div class="text-xs text-slate-400 mt-1">
             智能默认：<span class="text-blue-600 font-mono">{{ currentAutoRedirectUri }}</span>（请确保在 OneAuth 登录控制台中登记此回调地址）
           </div>
-        </el-form-item>
-        
-        <el-divider content-position="left"><span class="text-xs text-slate-400">组织架构与员工同步账号 (可选)</span></el-divider>
-        <el-form-item label="同步用户名">
-          <el-input v-model="ssoConfigForm.sync_username" placeholder="具有组织只读权限的账号" />
-        </el-form-item>
-        <el-form-item label="同步密码">
-          <el-input v-model="ssoConfigForm.sync_password" type="password" show-password />
-        </el-form-item>
-      </el-form>
+        </a-form-item>
+
+        <a-divider orientation="left"><span class="text-xs text-slate-400">组织架构与员工同步账号 (可选)</span></a-divider>
+        <a-form-item label="同步用户名">
+          <a-input v-model="ssoConfigForm.sync_username" placeholder="具有组织只读权限的账号" />
+        </a-form-item>
+        <a-form-item label="同步密码">
+          <a-input-password v-model="ssoConfigForm.sync_password" allow-clear />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button type="success" plain :loading="testingConfig" @click="testSSOConfig">测试连接</el-button>
-        <el-button @click="ssoConfigVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingConfig" @click="saveSSOConfig(false)">保存配置</el-button>
+        <a-button type="outline" status="success" :loading="testingConfig" @click="testSSOConfig">测试连接</a-button>
+        <a-button @click="ssoConfigVisible = false">取消</a-button>
+        <a-button type="primary" :loading="savingConfig" @click="saveSSOConfig(false)">保存配置</a-button>
       </template>
-    </el-dialog>
-  </div>
+    </a-modal>
+  </AppPage>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { userApi } from '@/api'
-import { 
-  Settings, Building2, UserPlus, RefreshCw, 
+import {
+  Settings, Building2, UserPlus, RefreshCw,
   Search, Folder, FolderTree, AlertTriangle,
-  ShieldCheck, ChevronDown, Users, Trash2
+  ShieldCheck, ChevronDown, Trash2
 } from 'lucide-vue-next'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { Message, Modal } from '@arco-design/web-vue'
+import AppPage from '@/components/ui/AppPage.vue'
+import AppPageHeader from '@/components/ui/AppPageHeader.vue'
+
+const userColumns = [
+  { title: '成员信息', minWidth: 220, slotName: 'member' },
+  { title: '工号/用户名', dataIndex: 'username', minWidth: 130 },
+  { title: '所属部门', minWidth: 140, slotName: 'department' },
+  { title: '系统角色', width: 130, slotName: 'role' },
+  { title: '账号状态', width: 100, align: 'center', slotName: 'status' },
+  { title: '操作', width: 190, align: 'right', slotName: 'actions' }
+]
+
+const candidateColumns = [
+  { title: '员工信息', minWidth: 180, slotName: 'candidate' },
+  { title: '企业邮箱', dataIndex: 'email', minWidth: 200 },
+  { title: '所属 OneAuth 部门', minWidth: 160, slotName: 'department' },
+  { title: '同步状态', width: 110, align: 'center', slotName: 'syncStatus' }
+]
 
 // 基础数据
 const loading = ref(false)
@@ -551,7 +532,7 @@ const users = ref([])
 // 部门筛选与选中
 const selectedDeptId = ref(null)
 const deptFilterText = ref('')
-const treeRef = ref(null)
+const expandedDeptKeys = ref([])
 
 // 成员搜索与分页
 const userSearchKeyword = ref('')
@@ -560,7 +541,7 @@ const pageSize = ref(10)
 
 // 成员多选与批量操作
 const selectedUsers = ref([])
-const userTableRef = ref(null)
+const selectedUserKeys = ref([])
 const batchRoleLoading = ref(false)
 const batchDeleteLoading = ref(false)
 
@@ -618,7 +599,6 @@ const allCandidates = ref([])
 const candidateKeyword = ref('')
 const candidateFilterType = ref('all')
 const selectedCandidateKeys = ref([])
-const candidateTableRef = ref(null)
 
 // 加载全部数据
 const fetchAll = async () => {
@@ -655,18 +635,34 @@ const deptTreeData = computed(() => {
   return roots
 })
 
-// 部门树过滤
-watch(deptFilterText, (val) => {
-  treeRef.value?.filter(val)
+watch(deptTreeData, (tree) => {
+  const keys = []
+  const collectKeys = (nodes) => nodes.forEach(node => {
+    keys.push(node.id)
+    collectKeys(node.children || [])
+  })
+  collectKeys(tree)
+  expandedDeptKeys.value = keys
+}, { immediate: true })
+
+// 搜索时保留命中的部门及其上级路径，避免打散原有层级。
+const filteredDeptTreeData = computed(() => {
+  const keyword = deptFilterText.value.trim().toLowerCase()
+  if (!keyword) return deptTreeData.value
+  const filterNodes = (nodes) => nodes.reduce((result, node) => {
+    const children = filterNodes(node.children || [])
+    if (node.name.toLowerCase().includes(keyword) || children.length) {
+      result.push({ ...node, children })
+    }
+    return result
+  }, [])
+  return filterNodes(deptTreeData.value)
 })
 
-const filterNode = (value, data) => {
-  if (!value) return true
-  return data.name.toLowerCase().includes(value.toLowerCase())
-}
-
-const handleTreeNodeClick = (data) => {
-  selectedDeptId.value = data.id
+const handleTreeSelect = (_selectedKeys, event) => {
+  const data = event?.selectedNodes?.[0] || event?.node
+  if (!data) return
+  selectedDeptId.value = data.id || data.key
   currentPage.value = 1
 }
 
@@ -707,7 +703,7 @@ const filteredUsers = computed(() => {
 
   if (userSearchKeyword.value.trim()) {
     const kw = userSearchKeyword.value.trim().toLowerCase()
-    list = list.filter(u => 
+    list = list.filter(u =>
       (u.full_name && u.full_name.toLowerCase().includes(kw)) ||
       (u.username && u.username.toLowerCase().includes(kw)) ||
       (u.email && u.email.toLowerCase().includes(kw))
@@ -721,6 +717,15 @@ const paginatedUsers = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   return filteredUsers.value.slice(start, start + pageSize.value)
 })
+
+const handlePageChange = (page) => {
+  currentPage.value = page
+}
+
+const handlePageSizeChange = (size) => {
+  pageSize.value = size
+  currentPage.value = 1
+}
 
 // 部门操作
 const openCreateDeptDialog = (parentId = null) => {
@@ -763,7 +768,7 @@ const executeDeleteDept = async (cascade = false) => {
   deletingDept.value = true
   try {
     const res = await userApi.deleteDepartment(targetDeptToDelete.value.id, { cascade })
-    ElMessage.success(res.message || '部门已成功删除')
+    Message.success(res.message || '部门已成功删除')
     if (selectedDeptId.value === targetDeptToDelete.value.id) {
       selectedDeptId.value = null
     }
@@ -778,17 +783,17 @@ const executeDeleteDept = async (cascade = false) => {
 
 const saveDept = async () => {
   if (!deptForm.value.name) {
-    ElMessage.warning('请输入部门名称')
+    Message.warning('请输入部门名称')
     return
   }
   savingDept.value = true
   try {
     if (isEditDept.value) {
       await userApi.updateDepartment(editDeptId.value, deptForm.value)
-      ElMessage.success('部门更新成功')
+      Message.success('部门更新成功')
     } else {
       await userApi.createDepartment(deptForm.value)
-      ElMessage.success('部门创建成功')
+      Message.success('部门创建成功')
     }
     deptDialogVisible.value = false
     fetchAll()
@@ -830,17 +835,17 @@ const openEditUserDialog = (row) => {
 
 const saveUser = async () => {
   if (!userForm.value.username || !userForm.value.full_name) {
-    ElMessage.warning('请填写工号和成员姓名')
+    Message.warning('请填写工号和成员姓名')
     return
   }
   savingUser.value = true
   try {
     if (isEditUser.value) {
       await userApi.updateUser(editUserId.value, userForm.value)
-      ElMessage.success('成员信息更新成功')
+      Message.success('成员信息更新成功')
     } else {
       await userApi.createUser(userForm.value)
-      ElMessage.success('成员新增成功')
+      Message.success('成员新增成功')
     }
     userDialogVisible.value = false
     fetchAll()
@@ -852,19 +857,20 @@ const saveUser = async () => {
 const handleRoleChange = async (row, newRole) => {
   try {
     await userApi.updateUser(row.id, { role: newRole })
-    ElMessage.success(`已将【${row.full_name}】角色变更为 ${getRoleText(newRole)}`)
+    Message.success(`已将【${row.full_name}】角色变更为 ${getRoleText(newRole)}`)
   } catch (e) {
     fetchAll()
   }
 }
 
 // 成员表格多选处理
-const handleUserSelectionChange = (selection) => {
-  selectedUsers.value = selection
+const handleUserSelectionChange = (keys) => {
+  selectedUserKeys.value = keys
+  selectedUsers.value = users.value.filter(user => keys.includes(user.id))
 }
 
 const clearUserSelection = () => {
-  userTableRef.value?.clearSelection()
+  selectedUserKeys.value = []
   selectedUsers.value = []
 }
 
@@ -875,56 +881,62 @@ const handleBatchRoleChange = (role) => {
   const userIds = selectedUsers.value.map(u => u.id)
   const count = userIds.length
 
-  ElMessageBox.confirm(
-    `确定要将已选中的 ${count} 位成员的角色批量修改为【${roleName}】吗？`,
-    '批量修改角色确认',
-    {
-      confirmButtonText: '确定修改',
-      cancelButtonText: '取消',
-      type: role === 'super_admin' ? 'warning' : 'info'
+  Modal.confirm({
+    title: '批量修改角色确认',
+    content: `确定要将已选中的 ${count} 位成员的角色批量修改为【${roleName}】吗？`,
+    okText: '确定修改',
+    cancelText: '取消',
+    simple: false,
+    onOk: async () => {
+      batchRoleLoading.value = true
+      try {
+        const res = await userApi.batchUpdateUserRole({ user_ids: userIds, role })
+        Message.success(res.message || `已成功将 ${count} 位成员角色修改为 ${roleName}`)
+        clearUserSelection()
+        await fetchAll()
+      } catch (e) {
+        Message.error(e.response?.data?.detail || '批量修改角色失败')
+        return false
+      } finally {
+        batchRoleLoading.value = false
+      }
     }
-  ).then(async () => {
-    batchRoleLoading.value = true
-    try {
-      const res = await userApi.batchUpdateUserRole({
-        user_ids: userIds,
-        role: role
-      })
-      ElMessage.success(res.message || `已成功将 ${count} 位成员角色修改为 ${roleName}`)
-      clearUserSelection()
-      await fetchAll()
-    } catch (e) {
-      ElMessage.error(e.response?.data?.detail || '批量修改角色失败')
-    } finally {
-      batchRoleLoading.value = false
-    }
-  }).catch(() => {})
+  })
 }
 
 const handleStatusChange = async (row, newStatus) => {
   try {
     await userApi.updateUser(row.id, { is_active: newStatus })
-    ElMessage.success(`账号状态已更新`)
+    Message.success(`账号状态已更新`)
   } catch (e) {
     fetchAll()
   }
 }
 
 const removeFromDept = (row) => {
-  ElMessageBox.confirm(`确定将【${row.full_name}】移出当前部门吗？`, '移出部门确认').then(async () => {
-    await userApi.updateUser(row.id, { department_id: null })
-    ElMessage.success('已移出部门')
-    fetchAll()
+  Modal.confirm({
+    title: '移出部门确认',
+    content: `确定将【${row.full_name}】移出当前部门吗？`,
+    simple: false,
+    onOk: async () => {
+      await userApi.updateUser(row.id, { department_id: null })
+      Message.success('已移出部门')
+      fetchAll()
+    }
   })
 }
 
 const handleDeleteUser = (row) => {
-  ElMessageBox.confirm(`确定要删除成员【${row.full_name}】吗？`, '删除确认', {
-    type: 'warning'
-  }).then(async () => {
-    await userApi.deleteUser(row.id)
-    ElMessage.success('成员已删除')
-    fetchAll()
+  Modal.confirm({
+    title: '删除确认',
+    content: `确定要删除成员【${row.full_name}】吗？`,
+    okButtonProps: { status: 'danger' },
+    simple: false,
+    onOk: async () => {
+      await userApi.deleteUser(row.id)
+      Message.success('成员已删除')
+      fetchAll()
+    }
   })
 }
 
@@ -933,10 +945,10 @@ const handleSyncDepartmentsOnly = async () => {
   syncingDept.value = true
   try {
     const res = await userApi.syncDepartments()
-    ElMessage.success(res.message || '部门架构同步完成')
+    Message.success(res.message || '部门架构同步完成')
     fetchAll()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '同步部门失败')
+    Message.error(e.response?.data?.detail || '同步部门失败')
   } finally {
     syncingDept.value = false
   }
@@ -953,7 +965,7 @@ const openCandidateUsersDialog = async () => {
     candidateKeyword.value = ''
     candidateDialogVisible.value = true
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '获取 OneAuth 成员候选列表失败')
+    Message.error(e.response?.data?.detail || '获取 OneAuth 成员候选列表失败')
   } finally {
     loadingCandidates.value = false
   }
@@ -973,7 +985,7 @@ const filteredCandidates = computed(() => {
 
   if (candidateKeyword.value.trim()) {
     const kw = candidateKeyword.value.trim().toLowerCase()
-    list = list.filter(c => 
+    list = list.filter(c =>
       c.username.toLowerCase().includes(kw) ||
       c.full_name.toLowerCase().includes(kw) ||
       (c.dept_name && c.dept_name.toLowerCase().includes(kw)) ||
@@ -983,34 +995,25 @@ const filteredCandidates = computed(() => {
   return list
 })
 
-const canSelectCandidate = () => true
-
-const handleCandidateSelectionChange = (selection) => {
-  selectedCandidateKeys.value = selection.map(item => item.key)
-}
-
 const selectUnsyncedAll = () => {
-  const unsyncedRows = filteredCandidates.value.filter(c => !c.is_synced)
-  if (candidateTableRef.value) {
-    unsyncedRows.forEach(row => {
-      candidateTableRef.value.toggleRowSelection(row, true)
-    })
-  }
+  selectedCandidateKeys.value = filteredCandidates.value
+    .filter(candidate => !candidate.is_synced)
+    .map(candidate => candidate.key)
 }
 
 const confirmImportCandidates = async () => {
   if (!selectedCandidateKeys.value.length) {
-    ElMessage.warning('请至少勾选一位要导入的员工')
+    Message.warning('请至少勾选一位要导入的员工')
     return
   }
   importingUsers.value = true
   try {
     const res = await userApi.importOneAuthUsers(selectedCandidateKeys.value)
-    ElMessage.success(res.message || `成功导入 ${selectedCandidateKeys.value.length} 位员工`)
+    Message.success(res.message || `成功导入 ${selectedCandidateKeys.value.length} 位员工`)
     candidateDialogVisible.value = false
     fetchAll()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '导入员工失败')
+    Message.error(e.response?.data?.detail || '导入员工失败')
   } finally {
     importingUsers.value = false
   }
@@ -1021,10 +1024,10 @@ const handleSyncAllData = async () => {
   syncingAll.value = true
   try {
     const res = await userApi.syncOneAuth()
-    ElMessage.success(res.message || '全量架构与员工同步完成')
+    Message.success(res.message || '全量架构与员工同步完成')
     fetchAll()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '同步失败')
+    Message.error(e.response?.data?.detail || '同步失败')
   } finally {
     syncingAll.value = false
   }
@@ -1037,19 +1040,19 @@ const openSSOConfigDialog = async () => {
     ssoConfigForm.value = { ...cfg }
     ssoConfigVisible.value = true
   } catch (e) {
-    ElMessage.error('获取配置失败')
+    Message.error('获取配置失败')
   }
 }
 
 const saveSSOConfig = async (triggerSync = false) => {
   if (!ssoConfigForm.value.server_url) {
-    ElMessage.warning('请输入身份源服务地址')
+    Message.warning('请输入身份源服务地址')
     return
   }
   savingConfig.value = true
   try {
     await userApi.updateSSOConfig(ssoConfigForm.value)
-    ElMessage.success('身份源连接配置已保存')
+    Message.success('身份源连接配置已保存')
     ssoConfigVisible.value = false
     if (triggerSync) {
       handleSyncAllData()
@@ -1063,45 +1066,45 @@ const handleBatchDeleteUsers = () => {
   if (!selectedUsers.value.length) return
   const count = selectedUsers.value.length
   const userIds = selectedUsers.value.map(user => user.id)
-  ElMessageBox.confirm(
-    `确定永久删除选中的 ${count} 位成员吗？删除后无法恢复；内置管理员和当前登录账号会被自动保护。`,
-    '批量删除成员',
-    {
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger'
+  Modal.confirm({
+    title: '批量删除成员',
+    content: `确定永久删除选中的 ${count} 位成员吗？删除后无法恢复；内置管理员和当前登录账号会被自动保护。`,
+    okText: '确认删除',
+    cancelText: '取消',
+    okButtonProps: { status: 'danger' },
+    simple: false,
+    onOk: async () => {
+      batchDeleteLoading.value = true
+      try {
+        const res = await userApi.batchDeleteUsers(userIds)
+        Message.success(res.message || `已删除 ${count} 位成员`)
+        clearUserSelection()
+        await fetchAll()
+      } catch (e) {
+        Message.error(e.response?.data?.detail || '批量删除失败')
+        return false
+      } finally {
+        batchDeleteLoading.value = false
+      }
     }
-  ).then(async () => {
-    batchDeleteLoading.value = true
-    try {
-      const res = await userApi.batchDeleteUsers(userIds)
-      ElMessage.success(res.message || `已删除 ${count} 位成员`)
-      clearUserSelection()
-      await fetchAll()
-    } catch (e) {
-      ElMessage.error(e.response?.data?.detail || '批量删除失败')
-    } finally {
-      batchDeleteLoading.value = false
-    }
-  }).catch(() => {})
+  })
 }
 
 const testSSOConfig = async () => {
   if (!ssoConfigForm.value.server_url) {
-    ElMessage.warning('请输入身份源服务地址')
+    Message.warning('请输入身份源服务地址')
     return
   }
   if (!ssoConfigForm.value.sync_username || !ssoConfigForm.value.sync_password) {
-    ElMessage.warning('请输入同步用户名和密码')
+    Message.warning('请输入同步用户名和密码')
     return
   }
   testingConfig.value = true
   try {
     const res = await userApi.testSSOConfig(ssoConfigForm.value)
-    ElMessage.success(res.message || 'OneAuth 连接测试成功')
+    Message.success(res.message || 'OneAuth 连接测试成功')
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || 'OneAuth 连接测试失败')
+    Message.error(e.response?.data?.detail || 'OneAuth 连接测试失败')
   } finally {
     testingConfig.value = false
   }
@@ -1120,7 +1123,7 @@ const getAvatarText = (name) => {
 }
 
 const colors = [
-  '#3b82f6', '#8b5cf6', '#10b981', '#06b6d4', 
+  '#3b82f6', '#8b5cf6', '#10b981', '#06b6d4',
   '#f59e0b', '#ec4899', '#6366f1', '#14b8a6'
 ]
 const getAvatarColor = (name) => {
@@ -1140,26 +1143,7 @@ onMounted(() => {
 
 <style scoped>
 .org-manage-page {
-  max-width: 1360px;
-  margin: 0 auto;
-}
-
-.top-action-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.page-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-}
-.page-subtitle {
-  font-size: 12px;
-  color: #64748b;
-  margin: 4px 0 0 0;
+  --app-page-gap: var(--app-space-4);
 }
 
 .btn-icon {
@@ -1168,8 +1152,8 @@ onMounted(() => {
 
 .org-layout-grid {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 20px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: var(--app-space-4);
   align-items: start;
 }
 @media (max-width: 900px) {
@@ -1182,7 +1166,7 @@ onMounted(() => {
 .dept-tree-card {
   padding: 16px;
   background: white;
-  border-radius: 12px;
+  border-radius: var(--app-radius-panel);
   position: sticky;
   top: 0;
   align-self: start;
@@ -1224,7 +1208,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--app-radius-control);
   cursor: pointer;
   margin-bottom: 6px;
   font-size: 13px;
@@ -1242,7 +1226,7 @@ onMounted(() => {
   background: #e2e8f0;
   color: #475569;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--app-radius-panel);
 }
 
 .custom-tree-node {
@@ -1273,10 +1257,13 @@ onMounted(() => {
 
 /* 成员卡片 */
 .dept-members-card {
+  min-width: 0;
   padding: 20px;
   background: white;
-  border-radius: 12px;
+  border-radius: var(--app-radius-panel);
+  overflow: hidden;
 }
+.dept-members-card :deep(.arco-table-container) { overflow-x: auto; }
 .members-header {
   display: flex;
   justify-content: space-between;
@@ -1372,9 +1359,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+  background: var(--color-fill-1);
   border: 1px solid #bfdbfe;
-  border-radius: 10px;
+  border-radius: var(--app-radius-panel);
   padding: 10px 16px;
   margin-bottom: 14px;
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.06);

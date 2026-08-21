@@ -1,7 +1,7 @@
 <template>
   <div class="p-6">
     <div v-if="loading" class="text-center py-20">
-      <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+      <a-spin :size="32" />
       <p class="mt-4 text-slate-500">正在进入工作台...</p>
     </div>
   </div>
@@ -11,7 +11,6 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { Loading } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()

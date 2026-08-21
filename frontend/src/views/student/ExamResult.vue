@@ -1,9 +1,6 @@
 <template>
   <div class="result-page">
-    <div v-if="loading" class="loading-state">
-      <el-icon class="is-loading" :size="32" color="#2b6f9f"><Loading /></el-icon>
-      <p>正在调取归档答卷...</p>
-    </div>
+    <AppState v-if="loading" loading loading-text="正在调取归档答卷..." />
 
     <template v-else-if="resultData">
       <header class="document-toolbar">
@@ -202,7 +199,7 @@
         <div class="security-icon">保密</div>
         <h3>本次考务未开放答题明细</h3>
         <p>您的成绩与答卷已归档。试题、答案和解析将在管理员开放后显示。</p>
-        <el-button type="primary" plain @click="backToList">{{ backLabel }}</el-button>
+        <a-button type="outline" @click="backToList">{{ backLabel }}</a-button>
       </div>
     </template>
   </div>
@@ -211,8 +208,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Loading } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import {
   ArrowLeft,
   ClipboardCheck,
@@ -225,6 +221,7 @@ import {
 } from 'lucide-vue-next'
 import { examApi } from '@/api'
 import MarkdownAnswer from '@/components/exam/MarkdownAnswer.vue'
+import AppState from '@/components/ui/AppState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -237,7 +234,7 @@ const fetchResult = async () => {
   try {
     resultData.value = await examApi.getExamResult(route.params.recordId)
   } catch {
-    ElMessage.error('获取答卷结果失败')
+    Message.error('获取答卷结果失败')
   } finally {
     loading.value = false
   }
@@ -381,7 +378,7 @@ onMounted(fetchResult)
 .loading-state { padding: 120px 0; text-align: center; color: #8190a1; }
 .loading-state p { margin-top: 10px; font-size: 13px; }
 .document-toolbar {
-  max-width: 1320px;
+  max-width: var(--app-content-max);
   margin: 0 auto 12px;
   display: flex;
   align-items: center;
@@ -405,7 +402,7 @@ onMounted(fetchResult)
 .archive-mark { display: flex; align-items: baseline; gap: 9px; color: #8a98a7; font-size: 10px; letter-spacing: .1em; }
 .archive-mark strong { color: #4f6378; font-family: Consolas, monospace; font-size: 11px; }
 .paper-masthead {
-  max-width: 1320px;
+  max-width: var(--app-content-max);
   min-height: 190px;
   margin: 0 auto 18px;
   padding: 28px 34px;
@@ -455,7 +452,7 @@ onMounted(fetchResult)
 .score-stamp small { font-size: 10px; opacity: .75; }
 .score-stamp em { margin-top: 11px; padding-top: 8px; border-top: 1px solid currentColor; font-size: 11px; font-style: normal; font-weight: 700; }
 .paper-workspace {
-  max-width: 1320px;
+  max-width: var(--app-content-max);
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 276px;
@@ -549,7 +546,7 @@ onMounted(fetchResult)
   padding: 15px 17px;
   border: 1px solid #dce4ea;
   color: #283d51;
-  background: repeating-linear-gradient(#fff 0, #fff 30px, #edf1f4 31px);
+  background: var(--color-fill-1);
   font-size: 13px;
 }
 .reference-line { margin-top: 10px; padding: 10px 12px; display: grid; grid-template-columns: 68px 1fr; gap: 10px; background: #f2f8f5; }
@@ -622,17 +619,20 @@ onMounted(fetchResult)
 
 /* 与系统现有卡片语言对齐：保留整卷工作区结构，弱化纸质档案感。 */
 .result-page {
-  padding: 24px 30px 56px;
+  padding: var(--app-space-6) var(--app-space-6) 56px;
   color: var(--text-main);
-  background: var(--bg-main);
+  background: var(--color-bg-1);
 }
+.document-toolbar,
+.paper-masthead,
+.paper-workspace { max-width: var(--app-content-max); }
 .back-button {
   padding: 8px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--app-radius-control);
   color: var(--text-muted);
   background: #fff;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 .back-button:hover { color: var(--primary-hover); border-color: #bfdbfe; background: #eff6ff; }
 .archive-mark {
@@ -648,8 +648,8 @@ onMounted(fetchResult)
   padding: 26px 30px;
   border: 1px solid var(--border-color);
   border-top: 1px solid var(--border-color);
-  border-radius: 14px;
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--app-radius-panel);
+  box-shadow: var(--app-shadow-panel);
 }
 .paper-eyebrow { color: #64748b; letter-spacing: 0; }
 .paper-eyebrow span:first-child {
@@ -676,7 +676,7 @@ onMounted(fetchResult)
   padding: 18px 16px;
   border: 1px solid #bfdbfe;
   outline: 0;
-  border-radius: 12px;
+  border-radius: var(--app-radius-panel);
   color: #2563eb !important;
   background: #eff6ff;
   transform: none;
@@ -686,13 +686,13 @@ onMounted(fetchResult)
 .score-stamp.tone-pending { color: #d97706 !important; border-color: #fde68a; background: #fffbeb; }
 .score-stamp strong { font-family: inherit; font-size: 40px; font-weight: 800; }
 .score-stamp em { border-top-color: currentColor; }
-.paper-workspace { gap: 20px; }
+.paper-workspace { gap: var(--app-space-4); }
 .stream-toolbar {
   padding: 14px 18px;
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: var(--app-radius-panel);
   background: #fff;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--app-shadow-panel);
 }
 .stream-toolbar h2 { color: #1e293b; font-size: 15px; }
 .filter-tabs { padding: 3px; border-radius: 8px; background: #f1f5f9; }
@@ -701,8 +701,8 @@ onMounted(fetchResult)
 .question-sheet {
   border: 1px solid var(--border-color);
   border-left-width: 4px;
-  border-radius: 12px;
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--app-radius-panel);
+  box-shadow: var(--app-shadow-panel);
 }
 .question-heading { padding: 14px 18px; background: #f8fafc; }
 .question-number > span {
@@ -718,7 +718,7 @@ onMounted(fetchResult)
   font-weight: 750;
 }
 .question-number strong { color: #1e293b; font-size: 13px; }
-.question-result { padding: 4px 9px; border-radius: 999px; }
+.question-result { padding: 4px 9px; border-radius: var(--app-radius-control); }
 .question-content > h3 { color: #1e293b; }
 .option-row { border-radius: 8px; }
 .option-key { border-radius: 6px; }
@@ -733,19 +733,20 @@ onMounted(fetchResult)
 .question-footer { background: #f8fafc; }
 .sidebar-card {
   border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--app-radius-panel);
+  box-shadow: var(--app-shadow-panel);
   overflow: hidden;
 }
 .sidebar-title { color: #334155; background: #f8fafc; }
 .score-breakdown .receipt-total strong { color: #2563eb; font-family: inherit; font-weight: 800; }
 .question-grid button { border-radius: 6px; }
-.security-card { border-radius: 14px; box-shadow: var(--shadow-sm); }
+.security-card { border-radius: var(--app-radius-panel); box-shadow: var(--app-shadow-panel); }
 @media (max-width: 980px) {
-  .result-page { padding: 16px 16px 40px; }
+  .result-page { padding: var(--app-space-4) var(--app-space-4) 40px; }
 }
 @media (max-width: 680px) {
-  .paper-masthead { padding: 22px 20px; }
+  .result-page { padding-inline: 14px; }
+  .paper-masthead { padding: var(--app-space-5); }
   .score-stamp { width: 100%; flex-basis: auto; }
 }
 @media print {

@@ -17,10 +17,9 @@
     </div>
 
     <div v-show="mode === 'edit'" class="writing-surface">
-      <el-input
+      <a-textarea
         ref="editorRef"
         v-model="localContent"
-        type="textarea"
         :autosize="{ minRows: 7, maxRows: 18 }"
         placeholder="请输入答案。支持 Markdown，也可以粘贴、拖入或选择图片…"
         @input="emitAnswer"
@@ -48,7 +47,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 import { Image as ImageIcon, ImagePlus, X } from 'lucide-vue-next'
 import { examApi } from '@/api'
 import MarkdownAnswer from './MarkdownAnswer.vue'
@@ -92,7 +91,7 @@ const emitAnswer = () => {
   emit('change')
 }
 
-const textarea = () => editorRef.value?.textarea
+const textarea = () => editorRef.value?.$el?.querySelector('textarea') || editorRef.value?.textarea
 
 const replaceSelection = async (replacement, selectionStart) => {
   localContent.value = replacement
@@ -138,14 +137,14 @@ const uploadFiles = async (files) => {
   const images = [...files].filter(file => file.type.startsWith('image/'))
   if (!images.length) return
   if (localAttachments.value.length + images.length > 6) {
-    ElMessage.warning('每道题最多上传 6 张图片')
+    Message.warning('每道题最多上传 6 张图片')
     return
   }
   uploading.value = true
   try {
     for (const file of images) {
       if (file.size > 5 * 1024 * 1024) {
-        ElMessage.warning(`${file.name} 超过 5 MB，已跳过`)
+        Message.warning(`${file.name} 超过 5 MB，已跳过`)
         continue
       }
       const formData = new FormData()
@@ -189,7 +188,7 @@ const removeAttachment = async (attachment) => {
 .essay-editor {
   overflow: hidden;
   border: 1px solid #d8e1ed;
-  border-radius: 10px;
+  border-radius: var(--app-radius-panel);
   background: #fff;
   transition: border-color .18s, box-shadow .18s;
 }
@@ -212,7 +211,7 @@ const removeAttachment = async (attachment) => {
   min-height: 30px;
   padding: 0 9px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--app-radius-control);
   color: #526177;
   background: transparent;
   cursor: pointer;
@@ -229,21 +228,21 @@ const removeAttachment = async (attachment) => {
   display: flex;
   padding: 2px;
   border: 1px solid #dce4ef;
-  border-radius: 7px;
+  border-radius: var(--app-radius-control);
   background: #fff;
 }
 .mode-switch button {
   padding: 4px 11px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--app-radius-control);
   color: #718096;
   background: transparent;
   cursor: pointer;
   font-size: 12px;
 }
 .mode-switch button.active { color: #1d4ed8; background: #eaf2ff; font-weight: 650; }
-.writing-surface { background: linear-gradient(#fff, #fff) padding-box, repeating-linear-gradient(transparent 0 31px, #eef2f7 32px) border-box; }
-.writing-surface :deep(.el-textarea__inner) {
+.writing-surface { background: var(--color-bg-2); }
+.writing-surface :deep(.arco-textarea) {
   padding: 16px 18px 8px;
   border: 0;
   box-shadow: none;
@@ -252,7 +251,7 @@ const removeAttachment = async (attachment) => {
   background: transparent;
   line-height: 1.8;
 }
-.writing-surface :deep(.el-textarea__inner:focus) { box-shadow: none; }
+.writing-surface :deep(.arco-textarea:focus) { box-shadow: none; }
 .writing-hint { padding: 4px 18px 10px; color: #98a4b3; font-size: 11px; }
 .preview-surface { min-height: 192px; padding: 17px 19px; background: #fff; }
 .attachment-strip {
@@ -272,7 +271,7 @@ const removeAttachment = async (attachment) => {
   align-items: center;
   gap: 5px;
   border: 1px solid #d9e5f7;
-  border-radius: 6px;
+  border-radius: var(--app-radius-control);
   color: #376095;
   background: #f2f7ff;
   font-size: 11px;

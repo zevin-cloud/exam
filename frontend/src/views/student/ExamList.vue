@@ -1,44 +1,38 @@
 <template>
-  <div class="exam-list-container">
-    <!-- 头部欢迎横幅 -->
-    <div class="welcome-banner app-card">
-      <div class="banner-content">
-        <h2>你好，{{ userStore.fullName }}</h2>
-        <p>所属部门：<span class="highlight-dept">{{ userStore.deptName }}</span> | 欢迎来到企业在线考试与能力评测中心</p>
-      </div>
-      <div class="banner-stats">
+  <AppPage class="exam-list-container">
+    <AppPageHeader
+      eyebrow="学习与考试"
+      :title="`你好，${userStore.fullName}`"
+      :description="`所属部门：${userStore.deptName} · 企业在线考试与能力评测中心`"
+    >
+      <template #actions>
         <div class="stat-pill">
           <span class="num">{{ examList.length }}</span>
           <span class="label">可参与考试</span>
         </div>
-      </div>
-    </div>
+      </template>
+    </AppPageHeader>
 
-    <!-- 考试列表分类 -->
-    <div class="section-title">
-      <h3>考务任务列表</h3>
-      <span class="sub-tip">请在截止时间前准时参加作答，考试期间请遵守考场纪律</span>
-    </div>
+    <AppPanel
+      title="考务任务列表"
+      description="请在截止时间前参加作答，考试期间请遵守考场纪律"
+    >
+      <AppState v-if="loading" loading loading-text="正在加载考务数据..." />
 
-    <div v-if="loading" class="text-center py-16">
-      <el-icon class="is-loading" :size="32" color="#3b82f6"><Loading /></el-icon>
-      <p class="text-slate-400 mt-2 text-sm">正在加载考务数据...</p>
-    </div>
+      <AppState
+        v-else-if="examList.length === 0"
+        title="当前暂无发布的考试安排"
+        description="管理员发布新的考核任务后将在此处显示"
+      />
 
-    <div v-else-if="examList.length === 0" class="empty-state app-card text-center py-16">
-      <div class="empty-icon">📭</div>
-      <p class="text-slate-500 font-medium">当前暂无发布的考试安排</p>
-      <span class="text-slate-400 text-xs mt-1">HR发布新的考核任务后将在此处通知</span>
-    </div>
-
-    <div v-else class="exam-grid">
+      <div v-else class="exam-grid">
       <div v-for="exam in examList" :key="exam.id" class="exam-card app-card">
         <div class="card-top">
           <div class="title-row">
             <h4 class="exam-title">{{ exam.title }}</h4>
-            <el-tag :type="getStatusTagType(exam)" size="small" effect="light">
+            <a-tag :color="getStatusTagColor(exam)" size="small">
               {{ getStatusText(exam) }}
-            </el-tag>
+            </a-tag>
           </div>
           <p class="exam-desc">{{ exam.description || '暂无描述' }}</p>
         </div>
@@ -75,62 +69,61 @@
 
         <div class="card-actions">
           <!-- 1. 未到开放时间 -->
-          <el-button 
+          <a-button
             v-if="getTimeStatus(exam).code === 'NOT_STARTED'"
-            type="info" 
-            plain 
+            type="secondary"
             disabled 
             class="action-btn"
           >
             尚未开放 ({{ formatShortTime(exam.start_time) }} 开启)
-          </el-button>
+          </a-button>
 
           <!-- 2. 已过截止时间且无进行中记录 -->
-          <el-button 
+          <a-button
             v-else-if="getTimeStatus(exam).code === 'EXPIRED' && exam.latest_record_status !== 'IN_PROGRESS'"
-            type="info" 
-            plain 
+            type="secondary"
             disabled 
             class="action-btn"
           >
             考务已截止
-          </el-button>
+          </a-button>
 
           <!-- 3. 正常允许作答或重考 -->
-          <el-button 
+          <a-button
             v-else-if="canTakeExam(exam)"
             type="primary" 
             class="action-btn"
             @click="startExam(exam.id)"
           >
             {{ exam.latest_record_status === 'IN_PROGRESS' ? '继续作答' : '开始考试' }}
-          </el-button>
+          </a-button>
 
           <!-- 4. 已交卷但待人工阅卷 -->
-          <el-button 
+          <a-button
             v-else-if="exam.latest_record_status === 'SUBMITTED'"
-            type="warning" 
-            plain 
+            type="outline"
+            status="warning"
             disabled 
             class="action-btn"
           >
             <Hourglass :size="14" class="mr-1" /> 主观题批阅中
-          </el-button>
+          </a-button>
 
           <!-- 5. 已完成出分 -->
-          <el-button 
+          <a-button
             v-if="exam.latest_record_id && exam.latest_record_status === 'GRADED'"
-            type="success" 
-            plain 
+            type="outline"
+            status="success"
             class="action-btn"
             @click="viewResult(exam.latest_record_id)"
           >
             <ChartColumnBig :size="14" class="mr-1" /> 查看成绩与解析
-          </el-button>
+          </a-button>
         </div>
       </div>
-    </div>
-  </div>
+      </div>
+    </AppPanel>
+  </AppPage>
 </template>
 
 <script setup>
@@ -138,9 +131,11 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { examApi } from '@/api'
-import { Loading } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { Hourglass, ChartColumnBig, Clock } from 'lucide-vue-next'
+import AppPage from '@/components/ui/AppPage.vue'
+import AppPageHeader from '@/components/ui/AppPageHeader.vue'
+import AppPanel from '@/components/ui/AppPanel.vue'
+import AppState from '@/components/ui/AppState.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -211,14 +206,16 @@ const getStatusText = (exam) => {
   return '未参加'
 }
 
-const getStatusTagType = (exam) => {
-  if (exam.latest_record_status === 'IN_PROGRESS') return 'primary'
-  if (exam.latest_record_status === 'SUBMITTED') return 'warning'
+const getStatusTagColor = (exam) => {
+  if (exam.latest_record_status === 'IN_PROGRESS') return 'blue'
+  if (exam.latest_record_status === 'SUBMITTED') return 'orange'
   if (exam.latest_record_status === 'GRADED') {
-    return exam.latest_score >= exam.pass_score ? 'success' : 'danger'
+    return exam.latest_score >= exam.pass_score ? 'green' : 'red'
   }
   const timeStat = getTimeStatus(exam)
-  return timeStat.type || 'info'
+  if (timeStat.type === 'danger') return 'red'
+  if (timeStat.type === 'success') return 'green'
+  return 'gray'
 }
 
 const startExam = (examId) => {
@@ -236,40 +233,14 @@ onMounted(() => {
 
 <style scoped>
 .exam-list-container {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.welcome-banner {
-  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
-  padding: 24px 30px;
-  border-radius: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 28px;
-  border: 1px solid #dbeafe;
-}
-.welcome-banner h2 {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 6px;
-}
-.welcome-banner p {
-  font-size: 13px;
-  color: #64748b;
-}
-.highlight-dept {
-  color: #2563eb;
-  font-weight: 600;
+  --app-page-gap: var(--app-space-4);
 }
 
 .stat-pill {
   background: white;
   padding: 10px 20px;
-  border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
+  border: 1px solid var(--color-border-2);
+  border-radius: var(--app-radius-control);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -300,16 +271,16 @@ onMounted(() => {
 .exam-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 20px;
+  gap: var(--app-space-4);
 }
 
 .exam-card {
   background: white;
-  padding: 22px;
+  padding: var(--app-space-5);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border-radius: 14px;
+  border-radius: var(--app-radius-panel);
 }
 
 .title-row {
@@ -322,12 +293,12 @@ onMounted(() => {
 .exam-title {
   font-size: 15.5px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--color-text-1);
   line-height: 1.4;
 }
 .exam-desc {
   font-size: 12.5px;
-  color: #64748b;
+  color: var(--color-text-3);
   margin-bottom: 16px;
   line-height: 1.5;
   display: -webkit-box;
@@ -337,8 +308,8 @@ onMounted(() => {
 }
 
 .card-meta-list {
-  background: #f8fafc;
-  border-radius: 10px;
+  background: var(--color-fill-1);
+  border-radius: var(--app-radius-control);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -372,7 +343,15 @@ onMounted(() => {
 }
 .action-btn {
   flex: 1;
-  border-radius: 9px;
   font-weight: 600;
+}
+@media (max-width: 720px) {
+  .exam-grid { grid-template-columns: minmax(0, 1fr); }
+  .exam-card { min-width: 0; padding: var(--app-space-4); }
+  .meta-item { gap: var(--app-space-2); align-items: flex-start; }
+  .meta-label { flex: 0 0 auto; }
+  .meta-val { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+  .card-actions { flex-wrap: wrap; }
+  .action-btn { flex-basis: 100%; }
 }
 </style>

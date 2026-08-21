@@ -1,18 +1,19 @@
 <template>
   <div class="direct-sso-container">
-    <div class="direct-sso-card app-card text-center p-8">
-      <el-icon class="is-loading" :size="42" color="#3b82f6"><Loading /></el-icon>
-      <h3 class="text-lg font-bold text-slate-800 mt-4">正在通过 OneAuth 单点登录...</h3>
-      <p class="text-xs text-slate-400 mt-2">已识别企业门户身份，正在免密直连考务系统</p>
-    </div>
+    <AppState
+      class="direct-sso-card"
+      loading
+      loading-text="正在通过 OneAuth 单点登录..."
+      description="已识别企业门户身份，正在免密直连考务系统"
+    />
   </div>
 </template>
 
 <script setup>
 import { onMounted } from 'vue'
 import { authApi } from '@/api'
-import { Loading } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
+import AppState from '@/components/ui/AppState.vue'
 
 onMounted(async () => {
   try {
@@ -23,7 +24,7 @@ onMounted(async () => {
       window.location.replace('/login')
     }
   } catch (e) {
-    ElMessage.error('无法获取 OneAuth 授权地址')
+    Message.error('无法获取 OneAuth 授权地址')
     window.location.replace('/login')
   }
 })
@@ -35,12 +36,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8fafc;
+  background: var(--color-bg-1);
 }
 .direct-sso-card {
-  width: 380px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+  width: min(480px, calc(100vw - 28px));
 }
 </style>

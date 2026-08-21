@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { Message } from '@arco-design/web-vue'
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -38,7 +38,7 @@ request.interceptors.response.use(
         window.location.href = '/login'
       }
     } else {
-      ElMessage.error(detail)
+      Message.error(detail)
     }
     return Promise.reject(error)
   }
